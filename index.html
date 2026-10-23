@@ -118,8 +118,11 @@ button{cursor:pointer}
 .rgbrow input[type=range]::-moz-range-track{background:transparent}
 .rgbrow .numin{width:62px}
 .expsize{display:flex;flex-direction:column;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
-.expsize label{display:flex;align-items:center;gap:6px;font-size:12.5px}
+.expsize label{display:flex;align-items:center;gap:6px;font-size:12.5px;white-space:nowrap}
+#tlSec select{width:auto;min-width:96px}
 .expsize .numin{width:90px}
+#mExport .card{max-height:calc(100dvh - 32px);overflow-y:auto}
+.status .rec{color:#d33;font-weight:700}
 .recent{display:flex;flex-wrap:wrap;gap:5px;min-height:22px}
 .recent button{width:22px;height:22px;border-radius:5px;border:1px solid var(--line);padding:0}
 .recent:empty::before{content:"使った色がここに並びます";font-size:11px;color:var(--muted)}
@@ -488,6 +491,7 @@ select{height:30px;border-radius:6px;border:1px solid var(--line);background:var
     <p class="note warn" id="newWarn" hidden></p>
     <div class="field"><span>紙の種類</span><div class="opts" id="paperOpts"></div></div>
     <div class="field"><span>紙の色</span><div class="opts" id="tintOpts"></div></div>
+    <label class="check"><input type="checkbox" id="c_newTl"> タイムラプスを記録する</label>
     <p class="note">いま開いている作品は保存してから切り替えます。</p>
     <div class="actions"><button class="btn" data-close>キャンセル</button><button class="btn primary" id="bCreate">作成</button></div>
   </div>
@@ -504,6 +508,14 @@ select{height:30px;border-radius:6px;border:1px solid var(--line);background:var
         <label style="margin-left:8px">解像度 <input type="number" class="numin" id="exDpi" min="1" max="2400"> dpi</label></div>
       <label class="check"><input type="checkbox" id="c_exKeep" checked> 印刷サイズを保つ（解像度も一緒に変える）</label>
       <p class="newinfo" id="exInfo"></p>
+    </div>
+    <div class="expsize" id="tlSec">
+      <div class="group" style="justify-content:space-between"><b style="font-size:13px">タイムラプス</b><label class="check" style="margin:0"><input type="checkbox" id="c_tl"> この作品を記録する</label></div>
+      <p class="newinfo" id="tlInfo"></p>
+      <div class="group"><label>長さ <select id="s_tlLen"><option value="15">15秒</option><option value="30" selected>30秒</option><option value="60">60秒</option><option value="0">全部のコマ（1秒に15コマ）</option></select></label>
+        <label>大きさ <select id="s_tlSize"><option value="1080">1080px</option><option value="720">720px</option></select></label></div>
+      <div class="group"><button class="btn sm primary" id="bTlExport">動画を書き出す</button><button class="btn sm danger" id="bTlClear">記録を消す</button></div>
+      <p class="note" id="tlNote">描くたびに途中の様子を自動で記録します。書き出しは選んだ長さの分だけ時間がかかります（30秒の動画なら約30秒）。書き出し中はこの画面を開いたままにしてください。</p>
     </div>
     <div class="actions">
       <button class="btn" data-close>閉じる</button>
@@ -1343,6 +1355,7 @@ function frame(now){const dt=lastT?Math.min(100,now-lastT):16;lastT=now;
  if(D.mipStale&&!stroke&&now-lastMip>220){genMips(D);lastMip=now;viewDirty=true;}
  if(viewDirty){renderView();viewDirty=false;}
  drawOverlay(now);
+ if(D.tl&&tlDirty&&!tlBusy&&!stroke&&!mv&&!tf&&now-tlLast>1000&&idb.db){tlLast=now;tlCapture();}
  if(!stroke&&now-lastThumb>400&&panelShown('layer')){lastThumb=now;for(const L of D.layers)if(L.thumbDirty&&!isFolder(L))drawThumb(L,D);}
  requestAnimationFrame(frame);}
 
@@ -2127,25 +2140,29 @@ function updNewInfo(){const [w,h]=newDims();const mp=w*h/1e6;const base=Math.rou
  $('#bCreate').disabled=!ok;}
 $('#oPort').onclick=()=>{nSel.portrait=true;buildNew();};$('#oLand').onclick=()=>{nSel.portrait=false;buildNew();};
 $('#cW').addEventListener('input',e=>{nSel.cw=+e.target.value;updNewInfo();});$('#cH').addEventListener('input',e=>{nSel.ch=+e.target.value;updNewInfo();});
-$('#wNew').onclick=()=>{nSel.paper=S.paper;buildNew();openModal('#mNew');};
+$('#wNew').onclick=()=>{$('#c_newTl').checked=false;nSel.paper=S.paper;buildNew();openModal('#mNew');};
 $('#bCreate').onclick=async()=>{const [w,h]=newDims();const z=SIZES[nSel.size];const dpi=z.px?72:nSel.dpi;S.paper=nSel.paper;saveSettings();closeModals();
  await saveNow(false);hideHint();
- try{if(D){resetHistory();freeDoc(D);D=null;}setDoc(createDoc(w,h,TINTS[nSel.tint][1],nSel.paper,{name:defaultName(),dpi}),true);}
+ try{if(D){resetHistory();freeDoc(D);D=null;}setDoc(createDoc(w,h,TINTS[nSel.tint][1],nSel.paper,{name:defaultName(),dpi}),true);if($('#c_newTl').checked){D.tl=true;D.tlN=0;tlDirty=true;updStatus();}}
  catch(err){console.error(err);toast(err.message||'キャンバスを作れませんでした');setDoc(createDoc(1600,1067,TINTS[0][1],5,{name:defaultName()}),true);}};
 
 /* ================= storage ================= */
 const idb={db:null,
- open(){return new Promise(res=>{try{const r=indexedDB.open('enogubako',1);r.onupgradeneeded=()=>r.result.createObjectStore('works',{keyPath:'id'});
+ open(){return new Promise(res=>{try{const r=indexedDB.open('enogubako',2);r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains('works'))db.createObjectStore('works',{keyPath:'id'});if(!db.objectStoreNames.contains('tl'))db.createObjectStore('tl');};
   r.onsuccess=()=>{this.db=r.result;res(true)};r.onerror=()=>res(false);r.onblocked=()=>res(false);}catch(e){res(false)}});},
  st(m){return this.db.transaction('works',m).objectStore('works')},
  p(r){return new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})},
  all(){return this.db?this.p(this.st('readonly').getAll()):Promise.resolve([])},
- get(id){return this.p(this.st('readonly').get(id))},put(v){return this.p(this.st('readwrite').put(v))},del(id){return this.p(this.st('readwrite').delete(id))}};
+ get(id){return this.p(this.st('readonly').get(id))},put(v){return this.p(this.st('readwrite').put(v))},del(id){return this.p(this.st('readwrite').delete(id))},
+ tl(m){return this.db.transaction('tl',m).objectStore('tl')},
+ tlPut(id,i,blob){return this.p(this.tl('readwrite').put(blob,[id,i]))},tlGet(id,i){return this.p(this.tl('readonly').get([id,i]))},
+ tlDel(id){return this.db?this.p(this.tl('readwrite').delete(IDBKeyRange.bound([id,0],[id,Infinity]))):Promise.resolve()}};
 
 let isDirty=false,changeAt=0,saving=false,demoDoc=false,savedAt=0;
-function changed(){isDirty=true;changeAt=performance.now();demoDoc=false;updStatus();}
+function changed(){isDirty=true;changeAt=performance.now();demoDoc=false;tlDirty=true;updStatus();}
 function updStatus(){if(!D)return;const s=$('#status');s.classList.toggle('dirty',isDirty&&!demoDoc);
  s.textContent=saving?'保存中…':(isDirty&&!demoDoc)?'未保存の変更':savedAt?'保存済み '+new Date(savedAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}):'';
+ if(D.tl){const r=document.createElement('span');r.className='rec';r.textContent=' ● 録画中';r.title='タイムラプスを記録しています';s.appendChild(r);}
  $('#wname').textContent=(D.name||'無題')+'　'+D.w+'×'+D.h+(D.dpi?' · '+D.dpi+'dpi':'');}
 const defaultName=()=>'無題 '+new Date().toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
 async function saveNow(manual){
@@ -2204,7 +2221,7 @@ async function layerEntries(L,d){if(L.zc&&L.zc.ver===L.ver)return L.zc.e;
  L.zc={ver:L.ver,e};return e;}
 async function packDoc(){const files=[];const enc=new TextEncoder();
  const meta={app:'enogubako',version:7,name:D.name,created:D.created,w:D.w,h:D.h,dpi:D.dpi,tint:D.tint,paper:D.paperType,active:D.active,
-  layers:D.layers.map(L=>({name:L.name,visible:L.visible,opacity:L.opacity,blend:L.blend,mask:L.mask?{on:L.maskOn}:null,ol:L.ol&&L.ol.on?L.ol:null,clip:!!L.clip,alock:!!L.alock,lock:!!L.lock,kind:L.kind||'layer',parent:L.parent?D.layers.indexOf(L.parent):-1,open:L.open!==false})),ruler:D.ruler||null};
+  layers:D.layers.map(L=>({name:L.name,visible:L.visible,opacity:L.opacity,blend:L.blend,mask:L.mask?{on:L.maskOn}:null,ol:L.ol&&L.ol.on?L.ol:null,clip:!!L.clip,alock:!!L.alock,lock:!!L.lock,kind:L.kind||'layer',parent:L.parent?D.layers.indexOf(L.parent):-1,open:L.open!==false})),ruler:D.ruler||null,tl:!!D.tl,tlN:D.tlN|0};
  files.push(['document.json',enc.encode(JSON.stringify(meta,null,1))]);
  for(let i=0;i<D.layers.length;i++){if(isFolder(D.layers[i])){const F=D.layers[i];if(F.mask)files.push([`layers/${i}.mask.r8`,await prep(readBytes(F.mask.f,D.w,D.h,1))]);continue;}const e=await layerEntries(D.layers[i],D);files.push([`layers/${i}.color.rgba8`,e.col]);files.push([`layers/${i}.glaze.rgba8`,e.gh]);if(e.mask)files.push([`layers/${i}.mask.r8`,e.mask]);}
  return makeZip(files);}
@@ -2217,7 +2234,7 @@ async function unpackDoc(blob,rec){const z=await readZip(await blob.arrayBuffer(
   else if(z[pfx+'color.f16']){upHalfConvert(L.fCol,d.w,d.h,4,z[pfx+'color.f16']);upHalfConvert(L.fGH,d.w,d.h,4,z[pfx+'glaze.f16']||glazeFromHeight(z[pfx+'height.f16']));}
   if(m.mask){L.mask=makeMask(d,1);L.maskOn=m.mask.on!==false;if(z[pfx+'mask.r8'])upBytes(L.mask.t,d.w,d.h,1,z[pfx+'mask.r8']);else if(z[pfx+'mask.f16'])upHalfConvert(L.mask.f,d.w,d.h,1,z[pfx+'mask.f16']);}
   d.layers.push(L);});
- d.active=clamp(meta.active|0,0,d.layers.length-1);d.ruler=meta.ruler||null;
+ d.active=clamp(meta.active|0,0,d.layers.length-1);d.ruler=meta.ruler||null;d.tl=!!meta.tl;d.tlN=d.id?(meta.tlN|0):0;
  meta.layers.forEach((m,i)=>{const L=d.layers[i];if(!L)return;L.parent=(m.parent|0)>=0&&m.parent!=null?d.layers[m.parent]||null:null;if(m.kind==='folder')L.open=m.open!==false;});
  meta.layers.forEach((m,i)=>{if(m.ol&&d.layers[i])d.layers[i].ol={on:!!m.ol.on,color:m.ol.color||'#FFFFFF',w:clamp(+m.ol.w||6,1,100)};});
  return d;}
@@ -2244,7 +2261,7 @@ async function showWorks(){openModal('#mWorks');const box=$('#worksList');box.in
    const fin=async()=>{if(done)return;done=true;const v=inp.value.trim()||w.name;w.name=v;const rec=await idb.get(w.id);if(rec){rec.name=v;await idb.put(rec);}if(w.id===D.id){D.name=v;updStatus();}nm.textContent=v;inp.replaceWith(nm);};
    inp.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter')fin();};inp.onblur=fin;};
   let armed=0;bd.onclick=async()=>{if(!armed){armed=setTimeout(()=>{armed=0;bd.textContent='削除';},3000);bd.textContent='本当に削除';return;}
-   clearTimeout(armed);await idb.del(w.id);if(w.id===D.id){D.id=null;isDirty=true;updStatus();}c.remove();if(!box.children.length)showWorks();};
+   clearTimeout(armed);await idb.del(w.id);idb.tlDel(w.id).catch(()=>{});if(w.id===D.id){D.id=null;isDirty=true;updStatus();}c.remove();if(!box.children.length)showWorks();};
   g.append(bo,br,bd);c.append(img,nm,dt,g);box.appendChild(c);}}
 $('#bWorks').onclick=showWorks;$('#wname').onclick=showWorks;
 
@@ -2263,6 +2280,41 @@ async function openFile(f){closeModals();
   const s=Math.min(D.w/src.width,D.h/src.height);const w=src.width*s,h=src.height*s;const rx=(D.w-w)/2,ry=(D.h-h)/2;
   hideHint();newLayerFrom(f.name.replace(/\.[^.]+$/,'').slice(0,30)||'画像',P.impFit,{uImg:T(t),uRect:[rx,ry,w,h]},[rx,ry,rx+w,ry+h]);gl.deleteTexture(t);toast('画像を新しいレイヤーに読み込みました');
  }catch(err){console.error(err);toast('画像を読み込めませんでした。PNGかJPEGを選んでください。');}}
+
+/* ---------- timelapse: a small image of the picture after each change, stored per work; exported as a video ---------- */
+let tlDirty=false,tlBusy=false,tlLast=0;
+function tlDims(d,long){const k=Math.min(1,long/Math.max(d.w,d.h));return[Math.max(2,Math.round(d.w*k/2)*2),Math.max(2,Math.round(d.h*k/2)*2)];}
+async function tlCapture(){if(!D||!D.tl||tlBusy)return;tlBusy=true;tlDirty=false;const d=D;
+ try{if(!d.id)d.id='w'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);const [tw,th]=tlDims(d,1080);const c=downCanvas(d,tw,th);
+  let b=await new Promise(r=>c.toBlob(r,'image/webp',.86));if(!b||b.type!=='image/webp')b=await new Promise(r=>c.toBlob(r,'image/jpeg',.88));
+  if(d!==D||!d.tl)return;const i=d.tlN|0;await idb.tlPut(d.id,i,b);d.tlN=i+1;isDirty=true;updTl();}
+ catch(err){console.warn(err);}finally{tlBusy=false;}}
+function updTl(){if(!D)return;$('#c_tl').checked=!!D.tl;const n=D.tlN|0;$('#tlInfo').textContent=D.tl||n?`記録したコマ：${n}`+(n?`（全部のコマなら約${Math.max(1,Math.round(n/15))}秒）`:''):'記録していません';
+ $('#bTlExport').disabled=n<2;$('#bTlClear').disabled=!n;}
+$('#c_tl').onchange=e=>{D.tl=e.target.checked;if(D.tl){tlDirty=true;toast('タイムラプスの記録を始めました');}changed();updTl();};
+$('#bTlClear').onclick=async()=>{if(!D.tlN)return;if(!confirmOnce($('#bTlClear'),'本当に消す'))return;await idb.tlDel(D.id);D.tlN=0;changed();updTl();toast('タイムラプスの記録を消しました');};
+function confirmOnce(btn,label){if(btn._armed){clearTimeout(btn._armed);btn._armed=0;btn.textContent=btn._orig;return true;}btn._orig=btn.textContent;btn.textContent=label;btn._armed=setTimeout(()=>{btn._armed=0;btn.textContent=btn._orig;},3000);return false;}
+function tlMime(){const c=['video/mp4;codecs=avc1.640028','video/mp4;codecs=avc1.42E01E','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
+ for(const m of c)if(window.MediaRecorder&&MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(m))return m;return null;}
+$('#bTlExport').onclick=async()=>{const d=D;const F=d.tlN|0;if(F<2)return;const mime=tlMime();if(!mime){toast('このブラウザでは動画を作れません');return;}
+ const btn=$('#bTlExport');btn.disabled=true;const old=btn.textContent;
+ try{settle(d);if(tlDirty)await tlCapture();const F2=d.tlN|0;const fps=30,len=+$('#s_tlLen').value;const N=len?Math.round(len*fps):F2*2;const hold=fps*2;
+  const first=await createImageBitmap(await idb.tlGet(d.id,0));const lg=+$('#s_tlSize').value;const k=Math.min(1,lg/Math.max(first.width,first.height));
+  const W=Math.max(2,Math.round(first.width*k/2)*2),H=Math.max(2,Math.round(first.height*k/2)*2);first.close();
+  const cv2=document.createElement('canvas');cv2.width=W;cv2.height=H;const x=cv2.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);
+  const manual=typeof cv2.captureStream==='function';const stream=cv2.captureStream(0);const track=stream.getVideoTracks()[0];const canReq=track&&typeof track.requestFrame==='function';
+  const rec=new MediaRecorder(canReq?stream:cv2.captureStream(fps),{mimeType:mime,videoBitsPerSecond:W*H*fps*.12});const chunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
+  const done=new Promise(r=>rec.onstop=r);rec.start(1000);let last=-1,bmp=null;const t0=performance.now();const total=N+hold;
+  for(let i=0;i<total;i++){const si=i<N?Math.min(F2-1,Math.round(i*(F2-1)/Math.max(1,N-1))):F2-1;
+   if(si!==last){const b=await idb.tlGet(d.id,si);if(b){const nb=await createImageBitmap(b);if(bmp)bmp.close();bmp=nb;}last=si;}
+   if(bmp){x.drawImage(bmp,0,0,W,H);x.fillStyle=i%2?'rgba(0,0,0,.004)':'rgba(255,255,255,.004)';x.fillRect(W-1,H-1,1,1);}if(canReq)track.requestFrame();
+   if(i%15===0)btn.textContent=`書き出し中… ${Math.round(i/total*100)}%`;
+   const wait=t0+(i+1)*1000/fps-performance.now();if(wait>0)await new Promise(r=>setTimeout(r,wait));}
+  if(bmp)bmp.close();await new Promise(r=>setTimeout(r,250));if(canReq)track.requestFrame();rec.stop();await done;stream.getTracks().forEach(t=>t.stop());
+  const ext=mime.startsWith('video/mp4')?'mp4':'webm';const blob=new Blob(chunks,{type:mime.split(';')[0]});
+  await offer(safeName()+'_timelapse.'+ext,blob);}
+ catch(err){console.error(err);toast('動画を書き出せませんでした');}
+ finally{btn.textContent=old;updTl();}};
 
 /* ---------- export (streaming PNG with dpi) ---------- */
 let DL=null;
@@ -2293,7 +2345,7 @@ $('#bExport').onclick=async()=>{settle(D);const tw=Math.min(900,D.w),th=Math.max
  openModal('#mExport');img.src=u;img.dataset.url=u;
  $('#expNote').textContent=DL?`PNG画像（${D.w}×${D.h}px・${D.dpi}dpi）か、レイヤーを残した作品ファイル（.zip）を保存できます。作品ファイルは「作品」→「ファイルを開く」で読み込めます。`
   :`ここではファイルを直接保存できません。上のプレビューは縮小版です。`;
- $('#ePng').hidden=$('#eZip').hidden=$('#expSize').hidden=!DL;ex={w:D.w,h:D.h,dpi:D.dpi||72};exInfo();};
+ $('#ePng').hidden=$('#eZip').hidden=$('#expSize').hidden=$('#tlSec').hidden=!DL;updTl();ex={w:D.w,h:D.h,dpi:D.dpi||72};exInfo();};
 let ex={w:0,h:0,dpi:350};
 function exInfo(){const mm=v=>(v/ex.dpi*25.4).toFixed(0);$('#exW').value=ex.w;$('#exH').value=ex.h;$('#exDpi').value=ex.dpi;
  $('#exInfo').textContent=`${ex.w} × ${ex.h} px ・ ${ex.dpi} dpi ・ 約${mm(ex.w)}×${mm(ex.h)}mm`+(ex.w===D.w&&ex.h===D.h?'（元のサイズ）':`（元の${Math.round(ex.w/D.w*1000)/10}%）`);}
