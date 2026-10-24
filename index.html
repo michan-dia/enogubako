@@ -350,7 +350,7 @@ select{height:30px;border-radius:6px;border:1px solid var(--line);background:var
           <label class="row" data-t="marker pen pencil" data-nonib="1"><span class="lab">抜き</span><input type="range" id="r_nuki" min="0" max="1000"><output id="o_nuki"></output></label>
           <label class="row" data-t="marker"><span class="lab">インクの濃さ</span><input type="range" id="r_mkden" min="0" max="100"><output id="o_mkden"></output></label>
           <label class="row" data-t="marker"><span class="lab">インク残量</span><input type="range" id="r_inklvl" min="0" max="100"><output id="o_inklvl"></output></label>
-          <label class="row" data-t="marker"><span class="lab">乾く時間</span><input type="range" id="r_mkdry" min="0" max="100"><output id="o_mkdry"></output></label>
+          <div class="seg" data-t="marker" role="group" aria-label="色の混ざり方" id="mixSeg"><button data-mix="0">色が混ざらない</button><button data-mix="1">色が混ざる</button></div>
           <label class="row" data-t="marker" data-nib="1"><span class="lab">角芯の角度</span><input type="range" id="r_nibang" min="0" max="180"><output id="o_nibang"></output></label>
           <label class="check" data-t="marker" data-nib="1"><input type="checkbox" id="c_tilt"> ペンの傾きで角度を変える</label>
           <label class="check" data-t="marker"><input type="checkbox" id="c_blender"> カラーレスブレンダー（色を抜いてぼかす）</label>
@@ -541,7 +541,7 @@ const SWATCH_GROUPS=[
  ['グレー',[['ウォームグレー 1','#E9E5DF'],['ウォームグレー 3','#CFC8BF'],['ウォームグレー 5','#AAA197'],['ウォームグレー 7','#7E766E'],['クールグレー 1','#E3E7EA'],['クールグレー 3','#C4CBD1'],['クールグレー 5','#9BA4AC'],['クールグレー 7','#6E7780'],['ブラック','#1E1E20']]]];
 const SWATCHES=SWATCH_GROUPS.flatMap(g=>g[1]);
 const TOOLS={
- marker:{n:'マーカー',s:'マーカー',k:'b',id:9,sp:.06,note:'アルコールマーカーのように透明に色が乗ります。乾く前に重ねると継ぎ目なく混ざり、乾いてから重ねると重なりが一段濃くなります。止めるとインクがにじんで溜まり、速く払うと薄くなります。'},
+ marker:{n:'マーカー',s:'マーカー',k:'b',id:9,sp:.06,note:'アルコールマーカーのように透明に色が乗ります。「色が混ざらない」は重ねるたびに一段濃くなります。「色が混ざる」は、ツールやレイヤーを切り替えるまで、重ねた色同士が継ぎ目なく混ざります。止めるとインクがにじんで溜まり、速く払うと薄くなります。'},
  pen:{n:'ペン',s:'ペン',k:'p',id:6,sp:.08,note:'線画用のペンです。筆圧に加えて「入り・抜き」で線の始まりと終わりが細くなります。線はペン先に遅れずに描かれ、ペンを離した瞬間に抜きの形に整います。'},
  pencil:{n:'鉛筆',s:'鉛筆',k:'n',id:4,sp:.16,note:'紙の目の凸部に乗ります。筆圧を上げると目の奥まで埋まって濃くなります。色鉛筆は今の色で、鉛筆は芯の濃さで描きます。'},
  airbrush:{n:'エアブラシ',s:'エアブラシ',k:'a',id:12,sp:.08,note:'ふんわりと色を吹きつけます。止めている間も少しずつ色が重なります。「スプレー」にすると細かい粒で吹きつけます。'},
@@ -597,7 +597,7 @@ const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==
 const S={tool:'marker',color:'#F5C9AE',cname:'フレッシュ',sizes:{marker0:14,marker1:14,marker2:3,pen:4,pencil:2.5,airbrush:60,eraser:30,blur:40},
  taper:{marker0:[36,90],marker2:[8,20],pen:[18,54],pencil:[8,18]},
  minSz:{marker0:.1,marker2:.7,pen0:.04,pen1:.15,pen2:.92,pencil:.75},
- nib:0,mkDen:.85,inkLvl:1,mkDry:2.5,nibAng:55,tiltAng:true,blender:false,airType:0,airFlow:.45,airHard:.2,tfKeep:true,tfQ:1,stab:.15,pressure:true,phard:.5,
+ nib:0,mkDen:.85,inkLvl:1,mkDry:2.5,mkMix:false,nibAng:55,tiltAng:true,blender:false,airType:0,airFlow:.45,airHard:.2,tfKeep:true,tfQ:1,stab:.15,pressure:true,phard:.5,
  penType:0,ink:.85,pencilType:0,pden:.65,ptilt:true,blurStr:.6,eHard:.6,strength:.9,selShape:0,fillRef:1,fillTol:.1,fillExp:2,rulerKind:0,snap:true,toolOrder:null,font:0,tsize:36,lh:1.3,fuchi:0,fuchiCol:0,vert:true,bold:true,
  paper:5,grain:.5,light:135,recent:[],layout:null,pickerMode:'wheel',maskTarget:0};
 try{const sv=JSON.parse(localStorage.getItem('enogubako.v4')||localStorage.getItem('enogubako.v3')||'null');if(sv&&!sv.taper)delete sv.stab;if(sv){const sz=Object.assign({},S.sizes,sv.sizes||{}),tp=Object.assign({},S.taper,sv.taper||{}),ms=Object.assign({},S.minSz,sv.minSz||{});Object.assign(S,sv);S.sizes=sz;S.taper=tp;S.minSz=ms;}}catch(e){}
@@ -657,6 +657,14 @@ vec3 dyeMix(vec3 a,vec3 b,float t){if(t<=0.)return a;if(t>=1.)return b;
  vec4 ml=exp(mix(log(al),log(bl),t)),mh=exp(mix(log(ah),log(bh),t));
  vec3 ra=clamp(a/max(proj(al,ah),vec3(1e-3)),.25,4.),rb=clamp(b/max(proj(bl,bh),vec3(1e-3)),.25,4.);
  return clamp(proj(ml,mh)*pow(ra,vec3(1.-t))*pow(rb,vec3(t)),0.,1.);}
+/* wet-on-wet: the dyes blend, but a lighter ink never washes out a darker one (per band the darker transmittance mostly survives) */
+vec4 dyeWet(vec3 a,float aA,vec3 b,float bA,float t){
+ vec4 al,ah,bl,bh;spec(a,al,ah);spec(b,bl,bh);float A=clamp(max(aA,bA),1e-3,1.);
+ vec4 eal=pow(al,vec4(aA)),eah=pow(ah,vec4(aA)),ebl=pow(bl,vec4(bA)),ebh=pow(bh,vec4(bA));
+ vec4 el=mix(min(eal,ebl),exp(mix(log(eal),log(ebl),t)),.3),eh=mix(min(eah,ebh),exp(mix(log(eah),log(ebh),t)),.3);
+ vec4 cl=pow(el,vec4(1./A)),ch=pow(eh,vec4(1./A));
+ vec3 ra=clamp(a/max(proj(al,ah),vec3(1e-3)),.25,4.),rb=clamp(b/max(proj(bl,bh),vec3(1e-3)),.25,4.);
+ return vec4(clamp(proj(cl,ch)*pow(ra,vec3(1.-t))*pow(rb,vec3(t)),0.,1.),A);}
 vec3 keepChroma(vec3 m,vec3 a,vec3 b,float t){const vec3 LW=vec3(.2126,.7152,.0722);float Lm=dot(m,LW);vec3 cm=m-Lm;float cur=length(cm);if(cur<1e-4)return m;
  float tc=mix(length(a-dot(a,LW)),length(b-dot(b,LW)),t)*.95;float k=max(tc/cur,1.);
  for(int i=0;i<3;i++){if(cm[i]>1e-5)k=min(k,(1.-Lm)/cm[i]);else if(cm[i]<-1e-5)k=min(k,-Lm/cm[i]);}
@@ -776,7 +784,7 @@ void body(ivec2 p,vec4 L,vec4 GH,float g){float h=GH.a;vec3 Gz=GH.rgb;
    }else{
      vec3 tg=clamp(uColor*(1.+(g-.5)*.04),0.,1.);
      if(ink0.a<.01){inkC=tg;inkA=md;}
-     else{float t=clamp(md/(md+ink0.a),0.,1.)*.9;inkC=keepChroma(dyeMix(ink0.rgb,tg,t),ink0.rgb,tg,t);inkA=max(ink0.a,md);}
+     else{float t=clamp(md/(md+ink0.a),0.,1.)*.9;vec4 wv=dyeWet(ink0.rgb,ink0.a,tg,min(md,1.),t);inkC=keepChroma(wv.rgb,ink0.rgb,tg,t);inkA=wv.a;}
    }
    oH=vec4(dyeLayer(preN,inkC,clamp(inkA,0.,1.)),h);oI=vec4(inkC,min(inkA,1.));oR=vec4(preN,pre.a);return;}}
 void main(){ivec2 p=ivec2(gl_FragCoord.xy);vec4 L=texelFetch(uCol,p,0);vec4 GH=texelFetch(uGH,p,0);float g=texelFetch(uPaperT,p,0).r;
@@ -827,12 +835,12 @@ mask:BRUSH+`uniform sampler2D uMask,uPaperT;out vec4 o;
 void main(){ivec2 p=ivec2(gl_FragCoord.xy);o=vec4(max(texelFetch(uMask,p,0).r,markerCov(gl_FragCoord.xy-uCenter,texelFetch(uPaperT,p,0).r)*selAt(p)));}`,
 
 mkMark:`uniform sampler2D uMask,uMkWet,uMkInk;layout(location=0) out vec4 oW;layout(location=1) out vec4 oI;
-void main(){ivec2 p=ivec2(gl_FragCoord.xy);float m=min(texelFetch(uMask,p,0).r,1.);oW=vec4(max(texelFetch(uMkWet,p,0).r,m));oI=vec4(max(texelFetch(uMkInk,p,0).r,m));}`,
+void main(){ivec2 p=ivec2(gl_FragCoord.xy);float m=min(texelFetch(uMask,p,0).r,1.);oW=vec4(max(texelFetch(uMkWet,p,0).r,m>.004?max(m,.32):0.));oI=vec4(max(texelFetch(uMkInk,p,0).r,m));}`,
 
-mkDry:`uniform sampler2D uMkWet,uMkInk,uGH,uInk,uPre;uniform ivec2 uSz;uniform float uDec,uEdge;uniform int uForce;
+mkDry:`uniform sampler2D uMkWet,uMkInk,uGH,uInk,uPre,uMA;uniform ivec2 uSz;uniform float uDec,uEdge;uniform int uForce,uHold;
 layout(location=0) out vec4 oW;layout(location=1) out vec4 oG;layout(location=2) out vec4 oI;layout(location=3) out vec4 oR;
 float ink(ivec2 q){q=clamp(q,ivec2(0),uSz-1);return min(texelFetch(uMkInk,q,0).r,1.);}
-void main(){ivec2 p=ivec2(gl_FragCoord.xy);float w0=texelFetch(uMkWet,p,0).r;float w1=uForce==1?0.:max(w0-uDec,0.);
+void main(){ivec2 p=ivec2(gl_FragCoord.xy);float w0=texelFetch(uMkWet,p,0).r;float w1=uForce==1?0.:(uHold==1&&texelFetch(uMA,p,0).r>0.)?w0:max(w0-uDec,0.);
  vec4 G=texelFetch(uGH,p,0);vec4 I=texelFetch(uInk,p,0);vec4 R=texelFetch(uPre,p,0);oW=vec4(w1);oG=G;oI=I;oR=R;
  bool dries=w0>.25&&w1<=.25;
  if(dries){float i0=ink(p);if(i0>.04){float a=0.;
@@ -841,6 +849,8 @@ void main(){ivec2 p=ivec2(gl_FragCoord.xy);float w0=texelFetch(uMkWet,p,0).r;flo
    oG.rgb=G.rgb*(1.-e*uEdge*(1.-G.rgb));}}
  if(dries||uForce==1){oR=vec4(oG.rgb,R.a);oI=vec4(0.);}}`,
 
+bsync:`uniform sampler2D uMA,uI,uR,uIB,uRB;`+MRT+`
+void main(){ivec2 p=ivec2(gl_FragCoord.xy);bool t=texelFetch(uMA,p,0).r>0.;oC=t?texelFetch(uIB,p,0):texelFetch(uI,p,0);oH=t?texelFetch(uRB,p,0):texelFetch(uR,p,0);}`,
 solid:`uniform vec4 uV;out vec4 o;void main(){o=uV;}`,
 copy:`uniform sampler2D uSrc;out vec4 o;void main(){o=texelFetch(uSrc,ivec2(gl_FragCoord.xy),0);}`,
 
@@ -1092,10 +1102,13 @@ function resetHistory(){for(const e of undoS.concat(redoS))freeEntry(e);undoS.le
 /* ================= marker drying session ================= */
 function mkClear(d){if(!d||!d.mk.active)return;const z=[0,0,0,0];fillFB(d.fMkWet,d.w,d.h,z);fillFB(d.fMkInk,d.w,d.h,z);fillFB(d.fInk,d.w,d.h,z);d.mk.active=false;d.mk.box=null;d.mk.layer=null;}
 function mkStep(d,dt,force){const L=d.mk.layer,b=d.mk.box;if(!L||L.dead||!b){mkClear(d);return;}
- const u={uMkWet:T(d.mkWet),uMkInk:T(d.mkInk),uGH:T(L.gh),uInk:T(d.ink),uPre:T(d.pre),uSz:{iv:[d.w,d.h]},uDec:force?1:dt/(Math.max(.3,S.mkDry)*1000),uEdge:.3,uForce:I(force?1:0)};
+ const hold=!force&&stroke&&stroke.d===d&&stroke.tool==='marker'&&!stroke.mask;
+ const u={uMkWet:T(d.mkWet),uMkInk:T(d.mkInk),uGH:T(L.gh),uInk:T(d.ink),uPre:T(d.pre),uMA:T(d.maskA),uHold:I(hold?1:0),uSz:{iv:[d.w,d.h]},uDec:force?1:dt/(Math.max(.3,S.mkDry)*1000),uEdge:.3,uForce:I(force?1:0)};
  target(d.fMkWetB,d.w,d.h,b);use(P.mkDryW,u);draw();
  target(d.fMk3,d.w,d.h,b);use(P.mkDryC,u);draw();
  blitB(d.fMkWetB,d.fMkWet,b);blitB(d.fS2,L.fGH,b);blitB(d.fS1,d.fInk,b);blitB(d.fS3,d.fPre,b);touchL(L,b);markDirty(d,b);
+ /* mid-stroke: untouched pixels that just dried must not be brought back wet by the stroke's base snapshot */
+ if(hold){target(d.fMRT,d.w,d.h,b);use(P.bsync,{uMA:T(d.maskA),uI:T(d.ink),uR:T(d.pre),uIB:T(d.inkBase),uRB:T(d.preBase)});draw();blitB(d.fS1,d.fInkBase,b);blitB(d.fS2,d.fPreBase,b);}
  if(d.layers.indexOf(L)<d.active)d.belowValid=false;
  if(force)mkClear(d);}
 function settle(d){if(d&&d.mk.active){if(d.mk.box)mkStep(d,0,true);else mkClear(d);}}
@@ -1159,7 +1172,7 @@ function beginStroke(d,x,y,p,record,ev){
  if(isFolder(L)&&!(!d.isPal&&d.editMask&&L.mask)){toast('フォルダには描けません。中のレイヤーを選んでください');return false;}
  if(isLocked(L)&&!d.isPal){toast('ロック中のレイヤーです。レイヤーのロックを外してください');return false;}
  const t=S.tool;const mk=!d.isPal&&d.editMask&&L.mask;
- if(d.mk.active&&(d.mk.layer!==L||t!=='marker'||mk))settle(d);
+ if(d.mk.active&&(d.mk.layer!==L||t!=='marker'||mk||d.mk.mix!==!!S.mkMix))settle(d);
  if(t==='marker'&&!mk){try{ensureMarker(d);}catch(err){console.error(err);toast(err.message||'マーカーを準備できませんでした');return false;}}
  if(record&&!d.isPal)beginEdit(L,mk?'mask':'layer');
  if(record&&!mk&&(t==='marker'&&!S.blender||t==='pen'||t==='airbrush'||t==='pencil'&&!(PENCILS[S.pencilType]||{}).col))pushRecent(S.color);
@@ -1175,7 +1188,7 @@ function beginStroke(d,x,y,p,record,ev){
  stroke.nibAng=nibAngle();
  if(mk){ensureMskB(d);return true;}
  if(t==='marker'){ensureMarker(d);fillFB(d.fMaskA,d.w,d.h,[0,0,0,0]);
-  if(!d.mk.active){blitAll(L.fGH,d.fPre,d);fillFB(d.fInk,d.w,d.h,[0,0,0,0]);d.mk.active=true;d.mk.layer=L;d.mk.box=null;}
+  if(!d.mk.active){blitAll(L.fGH,d.fPre,d);fillFB(d.fInk,d.w,d.h,[0,0,0,0]);d.mk.active=true;d.mk.layer=L;d.mk.box=null;d.mk.mix=!!S.mkMix;}
   stroke_tiles=new Set();}
  return true;}
 /* the 抜き segment is drawn provisionally at full width every frame and rolled back,
@@ -1236,7 +1249,7 @@ function dwellTick(dt){const st=stroke;if(!st||!st.down)return;
  if(st.tau>0&&performance.now()-st.lastEv>16&&(Math.hypot(st.rx-st.sx,st.ry-st.sy)>.3)){feedPoint(st.rx,st.ry,st.rp,st.lastIn+dt,null,true);}
  if(st.tool==='airbrush'&&!st.mask&&idle>30){const P0=st.pts[st.pts.length-1];dab(st.d,P0.x,P0.y,P0.p,0,{rad:Math.max(.5,sizeFor('airbrush',P0.p)*st.d.sizeK),flow:1,step:Math.min(.5,dt/140)});return;}
  if(st.mask||st.tool!=='marker'||idle<70)return;
- if(st.next<st.total){rbRestore();emitTo(st.total,false);}
+ rbRestore();if(st.next<st.total)emitTo(st.total,false);
  st.dwell=Math.min(st.dwell+dt,2200);st.bleed=Math.min(.95,Math.max(st.bleed,st.dwell/1000*.7));
  const ang=st.dir?Math.atan2(st.dir[1],st.dir[0]):0;const L=st.pts[st.pts.length-1];
  dab(st.d,L.x,L.y,L.p,ang,{rad:Math.max(.35,sizeFor('marker',L.p)*st.d.sizeK),flow:1.1,bleed:st.bleed});}
@@ -1246,7 +1259,8 @@ function endStroke(){if(!stroke)return;const st=stroke;rbRestore();
  else emitTo(st.total,true);
  const d=st.d;
  if(st.tool==='marker'&&!st.mask&&st.box){const b=st.box;target(d.fMkMark,d.w,d.h,b);use(P.mkMark,{uMask:T(d.maskA),uMkWet:T(d.mkWet),uMkInk:T(d.mkInk)});draw();
-  blitB(d.fMkWetB,d.fMkWet,b);blitB(d.fMkInkB,d.fMkInk,b);d.mk.box=growBox(d.mk.box,...b);d.mk.last=performance.now();}
+  blitB(d.fMkWetB,d.fMkWet,b);blitB(d.fMkInkB,d.fMkInk,b);d.mk.box=growBox(d.mk.box,...b);d.mk.last=performance.now();
+  if(!d.mk.mix)mkStep(d,0,true);}
  if(d===D){const L=st.pts[st.pts.length-1];D.lastEnd=[L.x,L.y];}
  stroke=null;if(d===D)endEdit();changed();
  const ge=gl.getError();if(ge&&ge!==gl.CONTEXT_LOST_WEBGL){console.error('GL error',ge);toast('描画でGPUのエラーが起きました（コード '+ge+'）。お手数ですが、ブラウザ名と一緒にお知らせください');}}
@@ -1346,8 +1360,7 @@ function frame(now){const dt=lastT?Math.min(100,now-lastT):16;lastT=now;
  dwellTick(dt);
  for(const d of [D]){if(!d||!d.mk.active)continue;
   const busy=stroke&&stroke.d===d;if(!d.mk.box){if(!busy)mkClear(d);continue;}
-  if(!busy&&now-d.mk.last>Math.max(.3,S.mkDry)*1000+250)settle(d);
-  else{d.mk.acc=(d.mk.acc||0)+dt;if(d.mk.acc>=1.6/255*Math.max(.3,S.mkDry)*1000){mkStep(d,d.mk.acc,false);d.mk.acc=0;}}}
+}
  if(stroke&&stroke.provDirty)provTail();
  prepComposite(D);
  if(tf&&tf.dirty){tf.dirty=false;tfPass();}
@@ -1588,6 +1601,7 @@ for(const id of ['tfSX','tfSY','tfRot'])$('#'+id).addEventListener('change',e=>{
 $('#c_tfkeep').onchange=e=>{S.tfKeep=e.target.checked;saveSettings();};
 $('#s_tfq').onchange=e=>{S.tfQ=+e.target.value;saveSettings();if(tf){tf.dirty=true;}};
 $$('#airSeg button').forEach(b=>b.onclick=()=>{S.airType=+b.dataset.air;saveSettings();syncUI();});
+$$('#mixSeg button').forEach(b=>b.onclick=()=>{S.mkMix=b.dataset.mix==='1';if(D&&!stroke)settle(D);saveSettings();syncUI();});
 updTfUI();
 
 /* ================= ruler ================= */
@@ -1644,7 +1658,7 @@ stage.addEventListener('pointerdown',e=>{
  if(e.button===2)return;capture(e);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,t:e.pointerType});
  if(isTouch){if(!tapG)tapG={n:0,t0:performance.now(),moved:false,st:new Map()};tapG.n=Math.max(tapG.n,touchCount());tapG.st.set(e.pointerId,[e.clientX,e.clientY]);}
  if(isTouch&&touchCount()===2){clearTimeout(lpTimer);
-  if(mode==='draw'&&stroke){const quick=performance.now()-stroke.t0<350;const d=stroke.d;rbRestore();stroke=null;if(d===D)endEdit();if(quick&&undoS.length){freeEntry(apply(undoS.pop()));updUndo();}}
+  if(mode==='draw'&&stroke){const quick=performance.now()-stroke.t0<350;const d=stroke.d;if(quick){rbRestore();stroke=null;if(d===D)endEdit();if(undoS.length){freeEntry(apply(undoS.pop()));updUndo();}}else endStroke();}
   if(mode==='pick')mode=null;
   if(mode==='move')moveEnd();if(mode==='ruler')rulerEnd();selDrag=null;lassoDrag=null;
   const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),cx:(a.x+b.x)/2,cy:(a.y+b.y)/2};mode='pinch';return;}
@@ -1802,7 +1816,6 @@ const RANGES={
  iri:{get:()=>Math.round(Math.sqrt(tp(0)()/600)*1000),set:v=>{(S.taper[tkey(S.tool)]=S.taper[tkey(S.tool)]||[0,0])[0]=Math.round(600*(v/1000)**2);},fmt:()=>tp(0)()?tp(0)()+'px':'なし'},
  nuki:{get:()=>Math.round(Math.sqrt(tp(1)()/600)*1000),set:v=>{(S.taper[tkey(S.tool)]=S.taper[tkey(S.tool)]||[0,0])[1]=Math.round(600*(v/1000)**2);},fmt:()=>tp(1)()?tp(1)()+'px':'なし'},
  mkden:{k:'mkDen'},inklvl:{k:'inkLvl'},
- mkdry:{get:()=>Math.round((S.mkDry-.5)/5.5*100),set:v=>S.mkDry=.5+v/100*5.5,fmt:()=>S.mkDry.toFixed(1)+'秒'},
  nibang:{get:()=>S.nibAng,set:v=>S.nibAng=v,fmt:()=>S.nibAng+'°'},
  ink:{k:'ink',fmt:()=>S.ink>=.99?'無限':Math.round(S.ink*100)},pden:{k:'pden'},blurstr:{k:'blurStr'},ehard:{k:'eHard'},strength:{k:'strength'},phard:{k:'phard'},
  tsize:{get:()=>S.tsize,set:v=>S.tsize=v,fmt:()=>S.tsize+'px',text:true},lh:{get:()=>Math.round(S.lh*100),set:v=>S.lh=v/100,fmt:()=>S.lh.toFixed(2),text:true},
@@ -1830,7 +1843,7 @@ function syncUI(){for(const id in RANGES){const r=RANGES[id];$('#r_'+id).value=r
  $$('#brushSec [data-t]').forEach(el=>{let on=el.dataset.t.split(' ').includes(S.tool);if(on&&el.dataset.nib!=null)on=String(S.nib)===el.dataset.nib;if(on&&el.dataset.nonib&&S.tool==='marker')on=S.nib!==1;el.hidden=!on;});
  $$('#selShapeSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.shape===S.selShape));
  $$('#fillRefSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.ref===S.fillRef));
- $$('#airSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.air===(S.airType|0)));$('#c_tfkeep').checked=!!S.tfKeep;$('#s_tfq').value=S.tfQ?1:0;
+ $$('#airSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.air===(S.airType|0)));$$('#mixSeg button').forEach(b=>b.setAttribute('aria-pressed',(b.dataset.mix==='1')===!!S.mkMix));$('#c_tfkeep').checked=!!S.tfKeep;$('#s_tfq').value=S.tfQ?1:0;
  $$('#rulerSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.rk===S.rulerKind));$('#c_snap').checked=!!S.snap;
  $('#fuchiW').setAttribute('aria-pressed',S.fuchiCol===0);$('#fuchiB').setAttribute('aria-pressed',S.fuchiCol===1);
  $$('.tool').forEach(b=>b.setAttribute('aria-pressed',b.dataset.tool===S.tool));
@@ -2324,6 +2337,7 @@ let DL=null;
  else if(window.claude&&claude.use){try{DL=await claude.use('downloads');}catch(e){DL=null;}}
  else DL={save:async({filename,data})=>{const blob=data instanceof Blob?data:new Blob([data]);const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000);return{ok:true};}};})();
 if(window.enogu&&window.enogu.onClose)window.enogu.onClose(async()=>{try{if(stroke)endStroke();if(mv)moveEnd();if(tf)tfCommit();for(let i=0;i<40&&saving;i++)await new Promise(r=>setTimeout(r,100));if(D&&isDirty&&!demoDoc)await saveNow(false);}catch(e){console.error(e);}window.enogu.closeReady();});
+if(window.enogu&&window.enogu.onUpdate)window.enogu.onUpdate(()=>toast('新しい版をダウンロードしました。次にアプリを起動したときから使えます'));
 const safeName=()=>(D.name||'無題').replace(/[\\/:*?"<>|]/g,'_').trim()||'enogubako';
 function pngChunk(type,data){const len=new DataView(new ArrayBuffer(4));len.setUint32(0,data.length);const tb=new TextEncoder().encode(type);
  const crc=new DataView(new ArrayBuffer(4));crc.setUint32(0,(crcUp(crcUp(0xFFFFFFFF,tb),data)^0xFFFFFFFF)>>>0);return[len.buffer,tb,data,crc.buffer];}
@@ -2369,7 +2383,7 @@ $('#bClearDemo').onclick=()=>{hideHint();mkClear(D);resetHistory();const keep=D.
 async function demo(){
  const keep=JSON.stringify(Object.assign({},S,{layout:undefined,recent:undefined}));const d=D,kx=d.w/1600,ky=d.h/1067;
  let clock=0;
- const run=(tool,col,pts,o={})=>{Object.assign(S,o);S.tool=tool;S.color=col;
+ const run=(tool,col,pts,o={})=>{Object.assign(S,{mkMix:true},o);S.tool=tool;S.color=col;
   const q=pts.map(p=>[p[0]*kx,p[1]*ky,p[2]??.8]);if(!beginStroke(d,q[0][0],q[0][1],q[0][2],false))return;
   stroke.tau=0;stroke.lastT=clock;
   for(let i=1;i<q.length;i++){clock+=Math.hypot(q[i][0]-q[i-1][0],q[i][1]-q[i-1][1])/(o.speed||1.1);feedPoint(q[i][0],q[i][1],q[i][2],clock,null);}
@@ -2377,7 +2391,7 @@ async function demo(){
  const line=(x0,y0,x1,y1,n=20,p0=.8,p1=.8)=>Array.from({length:n+1},(_,i)=>{const t=i/n;return[x0+(x1-x0)*t,y0+(y1-y0)*t,p0+(p1-p0)*t];});
  const taper=(x0,y0,x1,y1,bend,n=30)=>Array.from({length:n+1},(_,i)=>{const t=i/n;const nx=-(y1-y0),ny=x1-x0,l=Math.hypot(nx,ny);const b=Math.sin(t*Math.PI)*bend;
   return[x0+(x1-x0)*t+nx/l*b,y0+(y1-y0)*t+ny/l*b,Math.max(.05,Math.sin(t*Math.PI))*.95];});
- const MK=(col,pts,o)=>run('marker',col,pts,Object.assign({nib:1,nibAng:90,tiltAng:false,mkDen:.88,inkLvl:1,blender:false},o));
+ const MK=(col,pts,o)=>run('marker',col,pts,Object.assign({nib:1,nibAng:90,tiltAng:false,mkDen:.88,inkLvl:1,blender:false,mkMix:true},o));
  d.layers[0].name='マーカー';
  for(let pass=0;pass<3;pass++){for(let y=176;y<=318;y+=26)MK('#86C2EA',line(120+pass*140,y,520,y,16));settle(d);}
  for(let x=640;x<=1060;x+=24){const t=(x-640)/420;const col=t<.36?'#F6DA4A':t<.68?'#F28C3A':'#D7383B';MK(col,line(x,165,x,330,12),{nibAng:0});}
@@ -2409,7 +2423,7 @@ async function demo(){
  for(let i=0;i<10;i++)run('pencil','#E26A8D',line(1340+i*8,820,1400+i*8,890,8,.7,.7),{pencilType:0,pden:.8});
  const c=document.createElement('canvas');c.width=d.w;c.height=d.h;const x=c.getContext('2d');
  const lab={size:Math.round(24*kx),lh:1.2,font:0,bold:true,vert:false,fuchi:0,fuchiCol:0,color:'#3a3d44'};
- const labels=[['重ね塗り（1・2・3回）',120,120],['乾く前に重ねる',640,120],['スーパーブラシ（入り抜き）',1150,120],['カラーレスブレンダー',120,440],['肌の影',640,440],['グレーの段階',1140,440],['ペン（G・丸・ミリ）',110,780],['鉛筆・色鉛筆',1150,780]];
+ const labels=[['重ね塗り（1・2・3回）',120,120],['色が混ざるマーカー',640,120],['スーパーブラシ（入り抜き）',1150,120],['カラーレスブレンダー',120,440],['肌の影',640,440],['グレーの段階',1140,440],['ペン（G・丸・ミリ）',110,780],['鉛筆・色鉛筆',1150,780]];
  await ensureFont(lab,labels.map(l=>l[0]).join('')+'試し描き');
  labels.forEach(([s,lx,ly])=>drawTextTo(x,s,lx*kx,ly*ky,lab));
  const t=uploadCanvasTex(c);const TL=newLayer(d,'文字');const fb=mkFB(TL.col,TL.gh);target(fb,d.w,d.h);use(P.impR,{uImg:T(t),uOff:{iv:[0,0]},uISz:{iv:[d.w,d.h]}});draw();gl.deleteFramebuffer(fb);gl.deleteTexture(t);
