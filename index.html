@@ -350,7 +350,7 @@ select{height:30px;border-radius:6px;border:1px solid var(--line);background:var
           <label class="row" data-t="marker pen pencil" data-nonib="1"><span class="lab">抜き</span><input type="range" id="r_nuki" min="0" max="1000"><output id="o_nuki"></output></label>
           <label class="row" data-t="marker"><span class="lab">インクの濃さ</span><input type="range" id="r_mkden" min="0" max="100"><output id="o_mkden"></output></label>
           <label class="row" data-t="marker"><span class="lab">インク残量</span><input type="range" id="r_inklvl" min="0" max="100"><output id="o_inklvl"></output></label>
-          <div class="seg" data-t="marker" role="group" aria-label="色の混ざり方" id="mixSeg"><button data-mix="0">色が混ざらない</button><button data-mix="1">色が混ざる</button></div>
+          <div class="seg" data-t="marker" role="group" aria-label="色の混ざり方" id="mixSeg"><button data-mix="1">色が混ざらない</button><button data-mix="0">色が混ざる</button></div>
           <label class="row" data-t="marker" data-nib="1"><span class="lab">角芯の角度</span><input type="range" id="r_nibang" min="0" max="180"><output id="o_nibang"></output></label>
           <label class="check" data-t="marker" data-nib="1"><input type="checkbox" id="c_tilt"> ペンの傾きで角度を変える</label>
           <label class="check" data-t="marker"><input type="checkbox" id="c_blender"> カラーレスブレンダー（色を抜いてぼかす）</label>
@@ -541,7 +541,7 @@ const SWATCH_GROUPS=[
  ['グレー',[['ウォームグレー 1','#E9E5DF'],['ウォームグレー 3','#CFC8BF'],['ウォームグレー 5','#AAA197'],['ウォームグレー 7','#7E766E'],['クールグレー 1','#E3E7EA'],['クールグレー 3','#C4CBD1'],['クールグレー 5','#9BA4AC'],['クールグレー 7','#6E7780'],['ブラック','#1E1E20']]]];
 const SWATCHES=SWATCH_GROUPS.flatMap(g=>g[1]);
 const TOOLS={
- marker:{n:'マーカー',s:'マーカー',k:'b',id:9,sp:.06,note:'アルコールマーカーのように透明に色が乗ります。「色が混ざらない」は重ねるたびに一段濃くなります。「色が混ざる」は、ツールやレイヤーを切り替えるまで、重ねた色同士が継ぎ目なく混ざります。止めるとインクがにじんで溜まり、速く払うと薄くなります。'},
+ marker:{n:'マーカー',s:'マーカー',k:'b',id:9,sp:.06,note:'アルコールマーカーのように透明に色が乗ります。「色が混ざる」は重ねるたびに色が重なって一段濃くなります。「色が混ざらない」は、ツールやレイヤーを切り替えるまで、重ねても継ぎ目やムラが出ません。止めるとインクがにじんで溜まり、速く払うと薄くなります。'},
  pen:{n:'ペン',s:'ペン',k:'p',id:6,sp:.08,note:'線画用のペンです。筆圧に加えて「入り・抜き」で線の始まりと終わりが細くなります。線はペン先に遅れずに描かれ、ペンを離した瞬間に抜きの形に整います。'},
  pencil:{n:'鉛筆',s:'鉛筆',k:'n',id:4,sp:.16,note:'紙の目の凸部に乗ります。筆圧を上げると目の奥まで埋まって濃くなります。色鉛筆は今の色で、鉛筆は芯の濃さで描きます。'},
  airbrush:{n:'エアブラシ',s:'エアブラシ',k:'a',id:12,sp:.08,note:'ふんわりと色を吹きつけます。止めている間も少しずつ色が重なります。「スプレー」にすると細かい粒で吹きつけます。'},
@@ -597,10 +597,10 @@ const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==
 const S={tool:'marker',color:'#F5C9AE',cname:'フレッシュ',sizes:{marker0:14,marker1:14,marker2:3,pen:4,pencil:2.5,airbrush:60,eraser:30,blur:40},
  taper:{marker0:[36,90],marker2:[8,20],pen:[18,54],pencil:[8,18]},
  minSz:{marker0:.1,marker2:.7,pen0:.04,pen1:.15,pen2:.92,pencil:.75},
- nib:0,mkDen:.85,inkLvl:1,mkDry:2.5,mkMix:false,nibAng:55,tiltAng:true,blender:false,airType:0,airFlow:.45,airHard:.2,tfKeep:true,tfQ:1,stab:.15,pressure:true,phard:.5,
+ nib:0,mkDen:.85,inkLvl:1,mkDry:2.5,mkMix:true,mkMixV:2,nibAng:55,tiltAng:true,blender:false,airType:0,airFlow:.45,airHard:.2,tfKeep:true,tfQ:1,stab:.15,pressure:true,phard:.5,
  penType:0,ink:.85,pencilType:0,pden:.65,ptilt:true,blurStr:.6,eHard:.6,strength:.9,selShape:0,fillRef:1,fillTol:.1,fillExp:2,rulerKind:0,snap:true,toolOrder:null,font:0,tsize:36,lh:1.3,fuchi:0,fuchiCol:0,vert:true,bold:true,
  paper:5,grain:.5,light:135,recent:[],layout:null,pickerMode:'wheel',maskTarget:0};
-try{const sv=JSON.parse(localStorage.getItem('enogubako.v4')||localStorage.getItem('enogubako.v3')||'null');if(sv&&!sv.taper)delete sv.stab;if(sv){const sz=Object.assign({},S.sizes,sv.sizes||{}),tp=Object.assign({},S.taper,sv.taper||{}),ms=Object.assign({},S.minSz,sv.minSz||{});Object.assign(S,sv);S.sizes=sz;S.taper=tp;S.minSz=ms;}}catch(e){}
+try{const sv=JSON.parse(localStorage.getItem('enogubako.v4')||localStorage.getItem('enogubako.v3')||'null');if(sv&&!sv.taper)delete sv.stab;if(sv){const sz=Object.assign({},S.sizes,sv.sizes||{}),tp=Object.assign({},S.taper,sv.taper||{}),ms=Object.assign({},S.minSz,sv.minSz||{});Object.assign(S,sv);S.sizes=sz;S.taper=tp;S.minSz=ms;if(sv.mkMixV!==2){if(typeof sv.mkMix==='boolean')S.mkMix=!sv.mkMix;S.mkMixV=2;}}}catch(e){}
 if(!TOOLS[S.tool])S.tool='marker';
 let saveT=0;function saveSettings(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem('enogubako.v4',JSON.stringify(S))}catch(e){}},300)}
 
@@ -661,7 +661,9 @@ vec3 dyeMix(vec3 a,vec3 b,float t){if(t<=0.)return a;if(t>=1.)return b;
 vec4 dyeWet(vec3 a,float aA,vec3 b,float bA,float t){
  vec4 al,ah,bl,bh;spec(a,al,ah);spec(b,bl,bh);float A=clamp(max(aA,bA),1e-3,1.);
  vec4 eal=pow(al,vec4(aA)),eah=pow(ah,vec4(aA)),ebl=pow(bl,vec4(bA)),ebh=pow(bh,vec4(bA));
- vec4 el=mix(min(eal,ebl),exp(mix(log(eal),log(ebl),t)),.3),eh=mix(min(eah,ebh),exp(mix(log(eah),log(ebh),t)),.3);
+ /* hue blend at full strength, then at the combined density, so a thin edge of the new ink never dilutes what is underneath */
+ vec4 hl=pow(exp(mix(log(al),log(bl),t)),vec4(A)),hh=pow(exp(mix(log(ah),log(bh),t)),vec4(A));
+ vec4 el=min(mix(min(eal,ebl),hl,.3),eal),eh=min(mix(min(eah,ebh),hh,.3),eah);
  vec4 cl=pow(el,vec4(1./A)),ch=pow(eh,vec4(1./A));
  vec3 ra=clamp(a/max(proj(al,ah),vec3(1e-3)),.25,4.),rb=clamp(b/max(proj(bl,bh),vec3(1e-3)),.25,4.);
  return vec4(clamp(proj(cl,ch)*pow(ra,vec3(1.-t))*pow(rb,vec3(t)),0.,1.),A);}
@@ -2423,7 +2425,7 @@ async function demo(){
  for(let i=0;i<10;i++)run('pencil','#E26A8D',line(1340+i*8,820,1400+i*8,890,8,.7,.7),{pencilType:0,pden:.8});
  const c=document.createElement('canvas');c.width=d.w;c.height=d.h;const x=c.getContext('2d');
  const lab={size:Math.round(24*kx),lh:1.2,font:0,bold:true,vert:false,fuchi:0,fuchiCol:0,color:'#3a3d44'};
- const labels=[['重ね塗り（1・2・3回）',120,120],['色が混ざるマーカー',640,120],['スーパーブラシ（入り抜き）',1150,120],['カラーレスブレンダー',120,440],['肌の影',640,440],['グレーの段階',1140,440],['ペン（G・丸・ミリ）',110,780],['鉛筆・色鉛筆',1150,780]];
+ const labels=[['重ね塗り（1・2・3回）',120,120],['なめらかなグラデーション',640,120],['スーパーブラシ（入り抜き）',1150,120],['カラーレスブレンダー',120,440],['肌の影',640,440],['グレーの段階',1140,440],['ペン（G・丸・ミリ）',110,780],['鉛筆・色鉛筆',1150,780]];
  await ensureFont(lab,labels.map(l=>l[0]).join('')+'試し描き');
  labels.forEach(([s,lx,ly])=>drawTextTo(x,s,lx*kx,ly*ky,lab));
  const t=uploadCanvasTex(c);const TL=newLayer(d,'文字');const fb=mkFB(TL.col,TL.gh);target(fb,d.w,d.h);use(P.impR,{uImg:T(t),uOff:{iv:[0,0]},uISz:{iv:[d.w,d.h]}});draw();gl.deleteFramebuffer(fb);gl.deleteTexture(t);
