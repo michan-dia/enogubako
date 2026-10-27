@@ -127,6 +127,8 @@ button{cursor:pointer}
 .recent button{width:22px;height:22px;border-radius:5px;border:1px solid var(--line);padding:0}
 .recent:empty::before{content:"使った色がここに並びます";font-size:11px;color:var(--muted)}
 .ptop{display:flex;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}
+.swatch.clear{background:repeating-conic-gradient(#c9ccd1 0 25%,#fff 0 50%) 50%/12px 12px}
+#bClearInk[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .swatch{width:44px;height:44px;border-radius:50%;flex:none;border:1px solid var(--line);box-shadow:inset 0 -6px 12px rgba(0,0,0,.18),inset 0 4px 8px rgba(255,255,255,.18)}
 .curinfo{min-width:0;display:flex;flex-direction:column;gap:4px;flex:1}
 .pname{font-weight:700;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -324,6 +326,7 @@ select{height:30px;border-radius:6px;border:1px solid var(--line);background:var
         <div class="pname" id="pname"></div>
         <div class="hexrow">
           <input type="text" id="hexIn" maxlength="7" spellcheck="false" aria-label="カラーコード">
+          <button class="btn sm" id="bClearInk" aria-pressed="false" title="透明色で描く（C）。ペン・鉛筆・マーカー・エアブラシ・塗りつぶしが、その形のまま消すようになります">透明</button>
           <button class="btn sm icon" id="bPick" title="スポイト（Altを押しながらクリックでも取れます）" aria-label="スポイト"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m14 7 3 3"/><path d="M15.5 4.5a2.1 2.1 0 0 1 3 0l1 1a2.1 2.1 0 0 1 0 3L17 11l-4-4z"/><path d="M13 9 5 17v2h2l8-8"/></svg></button>
         </div>
       </div>
@@ -764,24 +767,28 @@ void main(){vec2 p=gl_FragCoord.xy+uSeed*37.;float h;
 
 dab:BRUSH+`uniform sampler2D uCol,uGH,uPaperT,uMask,uInkBase,uPreBase,uInkCur,uPreCur;uniform int uALock;uniform vec3 uColor;uniform float uInk,uStrength,uMkDen,uPDen,uSoft;uniform ivec2 uSz;
 `+MRT+`layout(location=2) out vec4 oI;layout(location=3) out vec4 oR;
+uniform int uClear;
+/* lay paint down, or with the transparent colour take it away in the same brush shape */
+void put(vec4 L,vec3 Gz,float h,float cov,float gk){if(uClear==1){oC=vec4(L.rgb,L.a*(1.-cov));oH=vec4(mix(Gz,vec3(1.),cov),h*(1.-cov));}
+ else{oC=depositO(L,uColor,cov);oH=vec4(mix(Gz,vec3(1.),cov*gk),h);}}
 void body(ivec2 p,vec4 L,vec4 GH,float g){float h=GH.a;vec3 Gz=GH.rgb;
  vec2 d=gl_FragCoord.xy-uCenter;float rpx=length(d);
  if(uTool==6){float R=max(uRadius,.5);float e=(g-.5)*(uPenType==2?.25:1.1)*(1.3-uInk);
    float cov=1.-smoothstep(R-.6,R+.45,rpx+e);
    if(uPenType!=2&&uInk<.55)cov*=smoothstep(1.-uInk*1.8-.1,1.-uInk*1.8+.2,g);
-   cov*=.98;oC=depositO(L,uColor,cov);oH=vec4(mix(Gz,vec3(1.),cov),h);return;}
+   cov*=.98;put(L,Gz,h,cov,1.);return;}
  if(uTool==4){float R=max(uRadius,.6);float c=1.-smoothstep(R*mix(.5,.1,uSoft),R+.7,rpx);if(c<=0.)return;
    vec2 fp=gl_FragCoord.xy;
    float tooth=g*.45+.35*hash2(floor(fp*.9))+.2*vn(fp*.45);
    float lead=(hash2(floor(fp*.7)+uSeed)-.5)*.12+(vn(fp*.3+uSeed*3.)-.5)*.1;
    float thr=mix(.74,.2,uPressure)-uSoft*.1+(1.-c)*.25;
    float cov=c*smoothstep(thr-.1,thr+.14,tooth+lead)*uPDen*(.35+.65*uPressure)*min(1.,uStep*2.);
-   cov=clamp(cov,0.,1.);oC=depositO(L,uColor,cov);oH=vec4(mix(Gz,vec3(1.),cov*.8),h);return;}
+   cov=clamp(cov,0.,1.);put(L,Gz,h,cov,.8);return;}
  if(uTool==12){float R=max(uRadius,1.);float x=rpx/R;if(x>=1.)return;
    float f=pow(clamp(1.-x*x,0.,1.),mix(2.6,.35,uEHard));float tgt=clamp(uStrength*f*(.25+.75*uPressure),0.,.98);float cov;
    if(uPenType==1){float n=ihash(uvec3(uvec2(gl_FragCoord.xy),uint(uSeed*1000.)));cov=n<tgt*uStep*1.7?.9:0.;}
    else{cov=1.-pow(1.-tgt,uStep*1.1);cov+=(ihash(uvec3(uvec2(gl_FragCoord.xy),uint(uSeed*1000.)+7u))-.5)/255.;}
-   cov=clamp(cov,0.,1.);if(cov<=0.)return;oC=depositO(L,uColor,cov);oH=vec4(mix(Gz,vec3(1.),cov),h);return;}
+   cov=clamp(cov,0.,1.);if(cov<=0.)return;put(L,Gz,h,cov,1.);return;}
  if(uTool==8){float R=max(uRadius,.5);float c=1.-smoothstep(R*mix(.2,.9,uEHard)-.3,R+.4,rpx);
    float s=clamp(c*uStrength*(uEHard>.85?1.:min(1.,uStep*3.)),0.,1.);
    oC=vec4(L.rgb,L.a*(1.-s));oH=vec4(mix(Gz,vec3(1.),s),h*(1.-s));return;}
@@ -791,6 +798,7 @@ void body(ivec2 p,vec4 L,vec4 GH,float g){float h=GH.a;vec3 Gz=GH.rgb;
     vec4 s=texelFetch(uCol,q,0);acc+=vec4(s.rgb*s.a,s.a);vec4 gq=texelFetch(uGH,q,0);ga+=gq.rgb;ha+=gq.a;}
    acc/=14.;ga/=14.;ha/=14.;float k=clamp(c*uStrength*min(1.,uStep*4.),0.,1.);
    vec4 pm=mix(vec4(L.rgb*L.a,L.a),acc,k);oC=vec4(pm.a>1e-4?pm.rgb/pm.a:L.rgb,pm.a);oH=vec4(mix(Gz,ga,k),mix(h,ha,k));return;}
+ if(uTool==9&&uClear==1){float m=clamp(markerCov(d,g)*selAt(p)*uMkDen,0.,1.);if(m>.001)put(L,Gz,h,m,1.);return;}
  if(uTool==9){float m=max(texelFetch(uMask,p,0).r,markerCov(d,g)*selAt(p));
    if(m<=.001)return;
    vec4 pre=texelFetch(uPreBase,p,0);vec4 ink0=texelFetch(uInkBase,p,0);
@@ -845,11 +853,11 @@ void main(){ivec2 p=ivec2(gl_FragCoord.xy);vec4 C=texelFetch(uSrcC,p,0),G=texelF
  else{for(int j=0;j<6;j++){if(j>=uN)break;for(int i=0;i<6;i++){if(i>=uN)break;vec2 o=(vec2(i,j)+.5)/float(uN)-.5;vec4 a,b;bil(q0+M*o,a,b);tc+=a;tg+=b;}}float k=1./float(uN*uN);tc*=k;tg*=k;}
  float a2=tc.a+bc.a*(1.-tc.a);vec3 rgb=a2<1e-4?bc.rgb:(tc.rgb+bc.rgb*bc.a*(1.-tc.a))/a2;
  oC=vec4(rgb,a2);oH=vec4(bg*(1.-tg.rgb),max(bh,tg.a));}`,
-mfill:`uniform sampler2D uCol,uGH,uM,uSel;uniform vec4 uR;uniform vec2 uDS;uniform int uSelOn,uMA,uALock;uniform vec3 uColor;`+MRT+`
+mfill:`uniform sampler2D uCol,uGH,uM,uSel;uniform vec4 uR;uniform vec2 uDS;uniform int uSelOn,uMA,uALock,uClear;uniform vec3 uColor;`+MRT+`
 void main(){ivec2 p=ivec2(gl_FragCoord.xy);vec4 L=texelFetch(uCol,p,0),G=texelFetch(uGH,p,0);vec2 uv=(vec2(p)+.5-uR.xy)/uR.zw;float m=0.;
  if(uv.x>=0.&&uv.y>=0.&&uv.x<1.&&uv.y<1.){vec4 t=texture(uM,uv);m=uMA==1?t.a:t.r;}
  if(uSelOn==1)m*=texture(uSel,(vec2(p)+.5)/uDS).a;
- oC=depositO(L,uColor,m);oH=vec4(mix(G.rgb,vec3(1.),m),G.a);
+ if(uClear==1){oC=vec4(L.rgb,L.a*(1.-m));oH=vec4(mix(G.rgb,vec3(1.),m),G.a*(1.-m));}else{oC=depositO(L,uColor,m);oH=vec4(mix(G.rgb,vec3(1.),m),G.a);}
  if(uALock==1){float pr=max(L.a,gpres(G.rgb));oC.a=clamp(oC.a,L.a,max(L.a,pr));oH=vec4(mix(G.rgb,oH.rgb,pr),G.a);}}`,
 mask:BRUSH+`uniform sampler2D uMask,uPaperT;out vec4 o;
 void main(){ivec2 p=ivec2(gl_FragCoord.xy);o=vec4(max(texelFetch(uMask,p,0).r,markerCov(gl_FragCoord.xy-uCenter,texelFetch(uPaperT,p,0).r)*selAt(p)));}`,
@@ -1176,14 +1184,14 @@ function dab(d,x,y,p,ang,o){
  let ink=1;if(id===6&&S.penType!==2&&S.ink<.99){const cap=250+3200*S.ink;ink=clamp(1-stroke.len/cap,.04,1);}
  const pc=PENCILS[S.pencilType]||PENCILS[0];
  const col=id===4&&pc.col?hex2lin(pc.col):hex2lin(S.color);
- const mk=id===9;
+ const mk=id===9&&!stroke.clear;
  const u={uTool:I(id),uNib:I(S.nib|0),uPenType:I(air?(S.airType|0):(S.penType|0)),uBlender:I(S.blender?1:0),uSelOn:I(d.sel?1:0),uSel:T(d.selT||G.one),uDS:[d.w,d.h],
   uSeed:air?stroke.seed+(stroke.dabN=(stroke.dabN||0)+1)*1.6180339:stroke.seed,uCenter:[x,y],uRadius:rad,uAngle:ang,uPressure:p,uStep:step,uFlow:o.flow??1,uBleed:bleed,uInkLvl:S.inkLvl,uNibAng:stroke.nibAng,uEHard:air?S.airHard:S.eHard};
  if(mk)ensureBase(d,clipR(d,[box[0]-4,box[1]-4,box[2]+4,box[3]+4]));
  target(mk?d.fMk3:d.fMRT,d.w,d.h,box);
  use(mk?P.dabMk:P.dab,Object.assign({uCol:T(L.col),uGH:T(L.gh),uPaperT:T(d.paper),uMask:T(mk?d.maskA:d.paper),uInkBase:T(mk?d.inkBase:d.paper),uPreBase:T(mk?d.preBase:d.paper),
   uInkCur:T(mk?d.ink:d.paper),uPreCur:T(mk?d.pre:d.paper),uSz:{iv:[d.w,d.h]},uColor:col,uInk:ink,uStrength:id===11?S.blurStr:air?S.airFlow:S.strength,uMkDen:S.mkDen,
-  uPDen:S.pden,uSoft:Math.min(1,pc.soft+(o.soft||0)),uALock:I(L.alock?1:0)},u));draw();
+  uPDen:S.pden,uClear:I(stroke.clear&&id!==8&&id!==11?1:0),uSoft:Math.min(1,pc.soft+(o.soft||0)),uALock:I(L.alock?1:0)},u));draw();
  if(mk){blitB(d.fS2,L.fGH,box);blitB(d.fS1,d.fInk,box);blitB(d.fS3,d.fPre,box);}else{blitB(d.fS1,L.fCol,box);blitB(d.fS2,L.fGH,box);}
  if(mk){target(d.fMaskB,d.w,d.h,box);use(P.mask,Object.assign({uMask:T(d.maskA),uPaperT:T(d.paper)},u));draw();blitB(d.fMaskB,d.fMaskA,box);}
  markDirty(d,box);touchL(L,box);}
@@ -1195,23 +1203,23 @@ function beginStroke(d,x,y,p,record,ev){
  if(!L.visible){toast('非表示のレイヤーには描けません');return false;}
  if(isFolder(L)&&!(!d.isPal&&d.editMask&&L.mask)){toast('フォルダには描けません。中のレイヤーを選んでください');return false;}
  if(isLocked(L)&&!d.isPal){toast('ロック中のレイヤーです。レイヤーのロックを外してください');return false;}
- const t=S.tool;const mk=!d.isPal&&d.editMask&&L.mask;
- if(d.mk.active&&(d.mk.layer!==L||t!=='marker'||mk||d.mk.mix!==!!S.mkMix))settle(d);
- if(t==='marker'&&!mk){try{ensureMarker(d);}catch(err){console.error(err);toast(err.message||'マーカーを準備できませんでした');return false;}}
+ const t=S.tool;const mk=!d.isPal&&d.editMask&&L.mask;const clr=!!S.clearInk&&!d.isPal&&!mk&&!(t==='marker'&&S.blender);
+ if(d.mk.active&&(d.mk.layer!==L||t!=='marker'||mk||clr||d.mk.mix!==!!S.mkMix))settle(d);
+ if(t==='marker'&&!mk&&!clr){try{ensureMarker(d);}catch(err){console.error(err);toast(err.message||'マーカーを準備できませんでした');return false;}}
  if(record&&!d.isPal)beginEdit(L,mk?'mask':'layer');
- if(record&&!mk&&(t==='marker'&&!S.blender||t==='pen'||t==='airbrush'||t==='pencil'&&!(PENCILS[S.pencilType]||{}).col))pushRecent(S.color);
+ if(record&&!mk&&!clr&&(t==='marker'&&!S.blender||t==='pen'||t==='airbrush'||t==='pencil'&&!(PENCILS[S.pencilType]||{}).col))pushRecent(S.color);
  const now=performance.now(),tp=(S.taper[tkey(t)]||[0,0]);
  const useTaper=t==='pen'||t==='pencil'||(t==='marker'&&S.nib!==1);
  stroke={d,tool:t,mask:!!mk,pts:[{x,y,p,s:0}],total:0,next:0,idx:0,dir:null,len:0,seed:Math.random()*100,first:true,t0:now,lastT:ev?ev.timeStamp:now,lastIn:null,lastMove:now,
   spd:0,lastEv:now,bleed:t==='marker'?.12:0,dwell:0,tilt:null,tiltMag:0,box:null,down:false,
-  tau:Math.pow(S.stab,1.6)*220,sx:x,sy:y,sp:p,rx:x,ry:y,rp:p,iri:useTaper?tp[0]*d.sizeK:0,nuki:useTaper?tp[1]*d.sizeK:0};
+  clear:clr,tau:Math.pow(S.stab,1.6)*220,sx:x,sy:y,sp:p,rx:x,ry:y,rp:p,iri:useTaper?tp[0]*d.sizeK:0,nuki:useTaper?tp[1]*d.sizeK:0};
  if(stroke.tau<.5)stroke.tau=0;RB.active=false;
  stroke.snap=(d===D&&S.snap&&D.ruler)?snapFn(D.ruler,x,y):null;
  if(stroke.snap){const q=stroke.snap(x,y);stroke.pts[0].x=stroke.sx=stroke.rx=q[0];stroke.pts[0].y=stroke.sy=stroke.ry=q[1];}
  {const tl=tiltOf(ev);if(tl){stroke.tilt=tl.a;stroke.tiltMag=tl.m;}}
  stroke.nibAng=nibAngle();
  if(mk){ensureMskB(d);return true;}
- if(t==='marker'){ensureMarker(d);fillFB(d.fMaskA,d.w,d.h,[0,0,0,0]);
+ if(t==='marker'&&!clr){ensureMarker(d);fillFB(d.fMaskA,d.w,d.h,[0,0,0,0]);
   if(!d.mk.active){blitAll(L.fGH,d.fPre,d);fillFB(d.fInk,d.w,d.h,[0,0,0,0]);d.mk.active=true;d.mk.layer=L;d.mk.box=null;d.mk.mix=!!S.mkMix;}
   stroke_tiles=new Set();}
  return true;}
@@ -1220,7 +1228,7 @@ function beginStroke(d,x,y,p,record,ev){
 const RB={w:0,h:0,c:[],r:null,active:false,box:null,list:null,d:null};
 function rbList(st){const d=st.d,L=actL(d);
  if(st.mask)return[[L.mask.f,'r']];
- if(st.tool==='marker')return[[L.fGH,'c'],[d.fInk,'c'],[d.fPre,'c'],[d.fMaskA,'r']];
+ if(st.tool==='marker'&&!st.clear)return[[L.fGH,'c'],[d.fInk,'c'],[d.fPre,'c'],[d.fMaskA,'r']];
  return[[L.fCol,'c'],[L.fGH,'c']];}
 function rbEnsure(w,h){if(w<=RB.w&&h<=RB.h)return;const W=Math.ceil(Math.max(w,RB.w)/128)*128,H=Math.ceil(Math.max(h,RB.h)/128)*128;
  for(const t of RB.c){gl.deleteTexture(t.t);gl.deleteFramebuffer(t.f);}if(RB.r){gl.deleteTexture(RB.r.t);gl.deleteFramebuffer(RB.r.f);}
@@ -1282,7 +1290,7 @@ function endStroke(){if(!stroke)return;const st=stroke;rbRestore();
  if(st.total<.5){const L=st.pts[st.pts.length-1];const r=Math.max(.35,sizeFor(st.tool,L.p)*st.d.sizeK);if(st.first)dab(st.d,L.x,L.y,L.p,0,{rad:r,flow:1,bleed:st.bleed});}
  else emitTo(st.total,true);
  const d=st.d;
- if(st.tool==='marker'&&!st.mask&&st.box){const b=st.box;target(d.fMkMark,d.w,d.h,b);use(P.mkMark,{uMask:T(d.maskA),uMkWet:T(d.mkWet),uMkInk:T(d.mkInk)});draw();
+ if(st.tool==='marker'&&!st.mask&&!st.clear&&st.box){const b=st.box;target(d.fMkMark,d.w,d.h,b);use(P.mkMark,{uMask:T(d.maskA),uMkWet:T(d.mkWet),uMkInk:T(d.mkInk)});draw();
   blitB(d.fMkWetB,d.fMkWet,b);blitB(d.fMkInkB,d.fMkInk,b);d.mk.box=growBox(d.mk.box,...b);d.mk.last=performance.now();
   if(!d.mk.mix)mkStep(d,0,true);}
  if(d===D){const L=st.pts[st.pts.length-1];D.lastEnd=[L.x,L.y];}
@@ -1448,7 +1456,7 @@ function selCmd(c){if(stroke||mv||tf)return;
  const L=actL(D);if(!L.visible){toast('非表示のレイヤーには描けません');return;}if(isFolder(L)){toast('フォルダには描けません。中のレイヤーを選んでください');return;}if(isLocked(L)){toast('ロック中のレイヤーです。レイヤーのロックを外してください');return;}
  const b=selBox(D);if(!b)return;
  settle(D);beginEdit(L);touch(b);
- target(D.fMRT,D.w,D.h,b);use(P.selOp,{uCol:T(L.col),uGH:T(L.gh),uSel:T(D.selT),uDS:[D.w,D.h],uColor:hex2lin(S.color),uMode:I(c==='fill'?0:1),uALock:I(L.alock?1:0)});draw();
+ target(D.fMRT,D.w,D.h,b);use(P.selOp,{uCol:T(L.col),uGH:T(L.gh),uSel:T(D.selT),uDS:[D.w,D.h],uColor:hex2lin(S.color),uMode:I(c==='fill'&&!S.clearInk?0:1),uALock:I(L.alock?1:0)});draw();
  blitB(D.fColB,L.fCol,b);blitB(D.fGHB,L.fGH,b);endEdit();touchL(L,b);markDirty(D,b);changed();}
 $$('[data-sel]').forEach(b=>b.onclick=()=>selCmd(b.dataset.sel));
 function selStart(x,y,e){selDrag={op:e.shiftKey?'add':e.altKey?'sub':'new',kind:['rect','ellipse','poly'][S.selShape],pts:S.selShape===2?[[x,y]]:[[x,y],[x,y]],sx:e.clientX,sy:e.clientY};}
@@ -1519,9 +1527,9 @@ $('#bTextOk').onclick=()=>commitText();$('#bTextCancel').onclick=()=>closeText()
 /* ================= fills ================= */
 function fillGuard(){if(stroke||mv)return null;const L=actL(D);if(!L.visible){toast('非表示のレイヤーには塗れません');return null;}if(isFolder(L)){toast('フォルダには描けません。中のレイヤーを選んでください');return null;}if(isLocked(L)){toast('ロック中のレイヤーです。レイヤーのロックを外してください');return null;}
  if(D.editMask&&L.mask){toast('マスクを編集中です。「レイヤーに描く」に戻してから塗ってください');return null;}settle(D);return L;}
-function maskFill(L,tex,rect,useA){pushRecent(S.color);const b=clipR(D,[rect[0],rect[1],rect[0]+rect[2],rect[1]+rect[3]]);if(b[2]<=b[0]||b[3]<=b[1])return;
+function maskFill(L,tex,rect,useA){if(!S.clearInk)pushRecent(S.color);const b=clipR(D,[rect[0],rect[1],rect[0]+rect[2],rect[1]+rect[3]]);if(b[2]<=b[0]||b[3]<=b[1])return;
  beginEdit(L);touch(b);target(D.fMRT,D.w,D.h,b);
- use(P.mfill,{uCol:T(L.col),uGH:T(L.gh),uM:T(tex),uSel:T(D.selT||G.one),uSelOn:I(D.sel?1:0),uDS:[D.w,D.h],uMA:I(useA?1:0),uR:rect,uColor:hex2lin(S.color),uALock:I(L.alock?1:0)});draw();
+ use(P.mfill,{uCol:T(L.col),uGH:T(L.gh),uM:T(tex),uSel:T(D.selT||G.one),uSelOn:I(D.sel?1:0),uDS:[D.w,D.h],uMA:I(useA?1:0),uR:rect,uColor:hex2lin(S.color),uClear:I(S.clearInk?1:0),uALock:I(L.alock?1:0)});draw();
  blitB(D.fS1,L.fCol,b);blitB(D.fS2,L.fGH,b);endEdit();touchL(L,b);markDirty(D,b);if(D.layers.indexOf(L)<D.active)D.belowValid=false;changed();}
 let lassoDrag=null;
 function lassoFill(pts){const L=fillGuard();if(!L||pts.length<3)return;let b=null;for(const q of pts)b=growBox(b,q[0],q[1],q[0],q[1]);
@@ -1786,6 +1794,7 @@ addEventListener('keydown',e=>{
  if(e.key==='+'||e.key===';'){const r=stage.getBoundingClientRect();zoomAt(1.25,r.width/2,r.height/2);return;}
  if(e.key==='-'){const r=stage.getBoundingClientRect();zoomAt(.8,r.width/2,r.height/2);return;}
  if(e.key==='0'){fit();return;}
+ if(k==='c'){toggleClear();return;}
  for(const t in TOOLS)if(TOOLS[t].k===k){setTool(t);return;}
 });
 addEventListener('keyup',e=>{if(e.code==='Space'){spaceDown=false;if(mode!=='pan')stage.style.cursor='';}});
@@ -1886,16 +1895,18 @@ function syncUI(){for(const id in RANGES){const r=RANGES[id];$('#r_'+id).value=r
  $('#fuchiW').setAttribute('aria-pressed',S.fuchiCol===0);$('#fuchiB').setAttribute('aria-pressed',S.fuchiCol===1);
  $$('.tool').forEach(b=>b.setAttribute('aria-pressed',b.dataset.tool===S.tool));
  $('#toolName').textContent=TOOLS[S.tool].n;$('#toolNote').textContent=TOOLS[S.tool].note;
- $('#swatch').style.background=S.color;$('#pname').textContent=S.cname;$('#hexIn').value=S.color;
+ $('#swatch').style.background=S.clearInk?'':S.color;$('#swatch').classList.toggle('clear',!!S.clearInk);$('#pname').textContent=S.clearInk?'透明色（描くと消えます）':S.cname;$('#hexIn').value=S.color;$('#bClearInk').setAttribute('aria-pressed',String(!!S.clearInk));
  $$('.pig').forEach(b=>b.setAttribute('aria-pressed',b.dataset.hex===S.color));
  updCursorSize();}
 function setTool(k){if(txt&&k!=='text')commitText();if(tf&&k!=='transform')tfCommit();S.tool=k;picking=false;syncUI();saveSettings();if(k==='transform'&&D)tfBegin();}
-function setColor(h,name,fromPicker){S.color=h.toUpperCase();if(!fromPicker)pickFromColor();drawPicker();const m=SWATCHES.find(p=>p[1]===S.color);S.cname=m?m[0]:(name||'任意の色');syncUI();placeText();saveSettings();}
+function setColor(h,name,fromPicker){S.color=h.toUpperCase();S.clearInk=false;if(!fromPicker)pickFromColor();drawPicker();const m=SWATCHES.find(p=>p[1]===S.color);S.cname=m?m[0]:(name||'任意の色');syncUI();placeText();saveSettings();}
 $('#hexIn').addEventListener('change',e=>{let v=e.target.value.trim();if(!v.startsWith('#'))v='#'+v;if(/^#[0-9a-f]{6}$/i.test(v))setColor(v,'任意の色');else e.target.value=S.color;});
 $('#bPick').onclick=()=>{picking=true;updCursorSize();toast('取りたい色をクリックしてください');};
 
 $('#bUndo').onclick=doUndo;$('#bRedo').onclick=doRedo;
 $('#bFit').onclick=fit;
+function toggleClear(){S.clearInk=!S.clearInk;saveSettings();syncUI();toast(S.clearInk?'透明色にしました。描いた所が消えます':'透明色をやめました');}
+$('#bClearInk').onclick=toggleClear;
 $('#bFlipTop').onclick=$('#bVFlip').onclick=()=>setViewFlip(!V.flip);
 $('#bVRotL').onclick=()=>setViewRot(V.rot-Math.PI/12);$('#bVRotR').onclick=()=>setViewRot(V.rot+Math.PI/12);
 $('#bVReset').onclick=()=>{const r=stage.getBoundingClientRect();viewKeep(r.width/2,r.height/2,()=>{V.rot=0;V.flip=false;});zoomUI();};
