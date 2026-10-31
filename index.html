@@ -1256,7 +1256,18 @@ function recognize(P){if(P.length<6)return null;let len=0;for(let i=1;i<P.length
   if(V0.length>=4){const pv=V0[V0.length-1],nx=V0[1],c=V0[0];if(segDist(c,pv,nx)<len*.03)V0.shift();}
   if(V0.length>=3&&V0.length<=6){let pdev=0;const segs=V0.map((q,i)=>[q,V0[(i+1)%V0.length]]);for(const p of P){let dd=1e9;for(const [a1,b1] of segs)dd=Math.min(dd,segDist(p,a1,b1));pdev+=dd;}pdev/=P.length;
    // a polygon wins only when it fits clearly better than the ellipse (corners are real)
-   if(pdev<len*.02&&pdev<edev*.6)poly={V0,pdev};}}
+   // every corner must really turn sharply: on a circle the bend is spread evenly, so a short window around a "corner" barely turns
+   const cum=[0];for(let i=1;i<P.length;i++)cum.push(cum[i-1]+Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]));
+   const near=q=>{let bi=0,bd=1e9;P.forEach((p,i)=>{const d=Math.hypot(p[0]-q[0],p[1]-q[1]);if(d<bd){bd=d;bi=i;}});return bi;};
+   const at=(s0)=>{s0=Math.max(0,Math.min(cum[cum.length-1],s0));let i=0;while(i<cum.length-1&&cum[i+1]<s0)i++;return P[i];};
+   const win=len*.025;let sharp=true;
+   for(let k=0;k<V0.length;k++){const q=V0[k],pv=V0[(k+V0.length-1)%V0.length],nx=V0[(k+1)%V0.length];
+    const ext=Math.abs(Math.atan2((q[0]-pv[0])*(nx[1]-q[1])-(q[1]-pv[1])*(nx[0]-q[0]),(q[0]-pv[0])*(nx[0]-q[0])+(q[1]-pv[1])*(nx[1]-q[1])));
+    const i=near(q),s1=cum[i];if(s1<win*2||s1>cum[cum.length-1]-win*2)continue;let loc=0;
+    for(let dd=-win;dd<=win;dd+=win/4){const s0=s1+dd,M=at(s0),A=at(s0-win),B=at(s0+win);
+     loc=Math.max(loc,Math.abs(Math.atan2((M[0]-A[0])*(B[1]-M[1])-(M[1]-A[1])*(B[0]-M[0]),(M[0]-A[0])*(B[0]-M[0])+(M[1]-A[1])*(B[1]-M[1]))));}
+    if(loc<ext*.55){sharp=false;break;}}
+   if(sharp&&pdev<len*.02&&pdev<edev*.75)poly={V0,pdev};}}
  if(poly){const V0=poly.V0;let Vp=V0;let name=['','','','三角形','四角形','五角形','六角形'][V0.length];
   if(V0.length===4){const ok=V0.every((q,i)=>{const p0=V0[(i+3)%4],p1=V0[(i+1)%4];const v1=[p0[0]-q[0],p0[1]-q[1]],v2=[p1[0]-q[0],p1[1]-q[1]];const c=(v1[0]*v2[0]+v1[1]*v2[1])/(Math.hypot(...v1)*Math.hypot(...v2)||1);return Math.abs(c)<.26;});
    if(ok){const e=[V0[1][0]-V0[0][0],V0[1][1]-V0[0][1]];let th=Math.atan2(e[1],e[0]);const snapA=Math.round(th/(Math.PI/2))*(Math.PI/2);if(Math.abs(th-snapA)<.09)th=snapA;const ux=Math.cos(th),uy=Math.sin(th);
@@ -1284,7 +1295,7 @@ function drawShape(st,pts){const sh=st.shape.sh,pm=st.shape.pm;const path=shapeP
  rbRestore();RB.active=false;emitTo(st.total-st.nuki,false);st.provDirty=st.nuki>0;}
 function smartShape(st){const P=st.pts.map(q=>[q.x,q.y]);if(st.pts.length>3900)return false;
  while(P.length>2&&Math.hypot(P[P.length-1][0]-P[P.length-2][0],P[P.length-1][1]-P[P.length-2][1])<.5)P.pop();
- const sh=recognize(P);if(!sh)return false;
+ const sh=recognize(P);if(!sh){toast('スマートシェイプ：形を判定できませんでした');return false;}
  const ps=st.pts.map(q=>q.p).sort((a,b)=>a-b);const pm=ps[Math.floor(ps.length/2)]||.65;
  // pivot for the follow-up drag: a line turns around its start, other shapes around their centre
  let C;if(sh.kind==='line')C=sh.pts[0];else if(sh.c)C=sh.c;else{let x=0,y=0;for(const q of sh.pts){x+=q[0];y+=q[1];}C=[x/sh.pts.length,y/sh.pts.length];}
@@ -1348,14 +1359,14 @@ function emitTo(target,ending){const st=stroke,cfg=TOOLS[st.tool],k=st.d.sizeK;l
   dab(st.d,q.x,q.y,q.p,ang,{rad,flow:flowNow(base)*(st.tool==='marker'?.55+.45*tap:1),bleed:st.bleed,soft:st.tool==='pencil'&&st.tiltMag>25?(st.tiltMag-25)/65*.5:0});
   st.first=false;st.len+=sp;st.next+=sp;}}
 function feedPoint(x,y,p,t,ev,synth){const st=stroke;if(st.snapped){if(!synth&&st.shape){if(st.snap){const q=st.snap(x,y);x=q[0];y=q[1];}if(Math.hypot(x-st.shape.Q0[0],y-st.shape.Q0[1])*V.scale>3||st.shape.moved){st.shape.moved=true;st.shape.q=[x,y];}}return;}if(st.snap&&!synth){const q=st.snap(x,y);x=q[0];y=q[1];}
- const moved=!synth&&(st.hx==null||Math.hypot(x-st.hx,y-st.hy)*V.scale>4);if(moved){st.hx=x;st.hy=y;}st.rx=x;st.ry=y;st.rp=p;if(!synth)st.lastEv=performance.now();
+ const moved=!synth&&(st.hx==null||Math.hypot(x-st.hx,y-st.hy)*V.scale>6);if(moved){st.hx=x;st.hy=y;}st.rx=x;st.ry=y;st.rp=p;if(!synth)st.lastEv=performance.now();
  {const tl=tiltOf(ev);if(tl){st.tilt=tl.a;st.tiltMag=tl.m;if(S.tiltAng)st.nibAng=st.tilt+Math.PI/2;}}
  if(st.tau>0){const dt=st.lastIn==null?16:clamp(t-st.lastIn,1,50);st.lastIn=t;const a=1-Math.exp(-dt/st.tau);
   st.sx+=(x-st.sx)*a;st.sy+=(y-st.sy)*a;st.sp+=(p-st.sp)*(1-Math.exp(-dt/(st.tau*.3+1)));pushPt(st.sx,st.sy,st.sp,t);}
  else{st.sp=st.sp*.35+p*.65;pushPt(x,y,st.sp,t);}
  if(moved)st.ht=performance.now();}
 function dwellTick(dt){const st=stroke;if(!st||!st.down)return;if(st.snapped){shapeDrag(st);return;}
- if(S.smart&&!st.shapeTried&&!st.mask&&!st.snap&&SMART_TOOLS.has(st.tool)&&st.ht&&performance.now()-st.ht>520&&st.total*V.scale>40){st.shapeTried=true;if(smartShape(st))return;}
+ if(S.smart&&!st.shapeTried&&!st.mask&&!st.snap&&SMART_TOOLS.has(st.tool)&&st.ht&&performance.now()-st.ht>480&&st.total*V.scale>40){st.shapeTried=true;if(smartShape(st))return;}
  const idle=performance.now()-st.lastMove;
  if(st.tau>0&&performance.now()-st.lastEv>16&&(Math.hypot(st.rx-st.sx,st.ry-st.sy)>.3)){feedPoint(st.rx,st.ry,st.rp,st.lastIn+dt,null,true);}
  if(st.tool==='airbrush'&&!st.mask&&idle>30){const P0=st.pts[st.pts.length-1];dab(st.d,P0.x,P0.y,P0.p,0,{rad:Math.max(.5,sizeFor('airbrush',P0.p)*st.d.sizeK),flow:1,step:Math.min(.5,dt/140)});return;}
