@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="enogu-build" content="202610311149">
+<meta name="enogu-build" content="202610311157">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' data: blob:">
 <title>絵具箱</title>
 <link rel="stylesheet" href="fonts/fonts.css">
@@ -145,6 +145,9 @@ button{cursor:pointer}
 input[type=range]{width:100%;accent-color:var(--accent);height:18px;margin:0}
 select{height:30px;border-radius:6px;border:1px solid var(--line);background:var(--raise);padding:0 6px;min-width:0;width:100%}
 .note{font-size:11.5px;line-height:1.65;color:var(--muted);margin:0}
+.anchor{display:grid;grid-template-columns:repeat(3,22px);gap:3px}
+.anchor button{width:22px;height:22px;border:1px solid var(--line);border-radius:4px;background:var(--raise);padding:0}
+.anchor button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent)}
 .navwrap{background:var(--raise);border:1px solid var(--line);border-radius:8px;padding:6px;display:flex;justify-content:center}
 #navC{display:block;max-width:100%;touch-action:none;cursor:pointer}
 .btn.icon[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
@@ -476,6 +479,12 @@ select{height:30px;border-radius:6px;border:1px solid var(--line);background:var
           <label class="row"><span class="lab">光の向き</span><input type="range" id="r_light" min="0" max="360"><output id="o_light"></output></label>
           <p class="note">マーカー用紙はインクがにじみにくく、縁がきれいに出ます。画用紙や水彩紙では縁が紙の目に沿ってけば立ちます。</p>
         </section>
+        <section class="sec">
+          <h2>キャンバス</h2>
+          <div class="group"><span class="lab" style="min-width:auto">単位</span><div class="seg" role="group" aria-label="長さの単位" id="unitSeg"><button data-u="px">px</button><button data-u="mm">mm</button></div></div>
+          <p class="note">ペンの太さ・入り抜き・キャンバスの大きさなどの表示を、ピクセルかミリメートルにそろえます。mm はキャンバスの解像度（dpi）から計算します。</p>
+          <button class="btn" id="bCanvasSize">キャンバスのサイズ・解像度を変える…</button>
+        </section>
         </div>
 </div>
 
@@ -497,7 +506,7 @@ select{height:30px;border-radius:6px;border:1px solid var(--line);background:var
   <div class="card" role="dialog" aria-modal="true" aria-labelledby="mNewT">
     <h3 id="mNewT">新規キャンバス</h3>
     <div class="field"><span>用紙サイズ</span><div class="opts" id="sizeOpts"></div></div>
-    <div class="field" id="customF" hidden><span>カスタム（ピクセル）</span><div class="group"><input class="numin" id="cW" type="number" min="64" max="16384" aria-label="幅"> × <input class="numin" id="cH" type="number" min="64" max="16384" aria-label="高さ"> px</div></div>
+    <div class="field" id="customF" hidden><span>カスタム</span><div class="group"><input class="numin" id="cW" type="number" step="any" aria-label="幅"> × <input class="numin" id="cH" type="number" step="any" aria-label="高さ"> <span class="exU">px</span></div></div>
     <div class="field" id="orientF"><span>向き</span><div class="seg" role="group" aria-label="向き"><button id="oPort">縦</button><button id="oLand">横</button></div></div>
     <div class="field"><span>解像度</span><div class="opts" id="dpiOpts"></div></div>
     <p class="newinfo" id="newInfo"></p>
@@ -510,13 +519,31 @@ select{height:30px;border-radius:6px;border:1px solid var(--line);background:var
   </div>
 </div>
 
+<div class="modal" id="mSize" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="mSizeT">
+    <h3 id="mSizeT">キャンバスのサイズと解像度</h3>
+    <p class="newinfo" id="szCur"></p>
+    <div class="seg" role="group" aria-label="変え方" id="szMode"><button data-m="0">絵ごと拡大・縮小する</button><button data-m="1">キャンバスだけ広げる・切る</button></div>
+    <div class="expsize">
+      <div class="group" style="gap:14px"><label>幅 <input type="number" class="numin" id="szW" step="any" min="1"> <span class="exU">px</span></label><label>高さ <input type="number" class="numin" id="szH" step="any" min="1"> <span class="exU">px</span></label></div>
+      <div class="group"><label>解像度 <input type="number" class="numin" id="szDpi" min="1" max="2400"> dpi</label><label class="check" id="szKeepF" style="margin:0 0 0 10px"><input type="checkbox" id="c_szKeep" checked> 縦横比を保つ</label></div>
+      <label class="check" id="szResF"><input type="checkbox" id="c_szRes"> 解像度を変えたら画素数も変える（印刷サイズを保つ）</label>
+      <div class="group" id="szAnchorF"><span style="font-size:12px;color:var(--muted)">基準の位置</span><div class="anchor" id="szAnchor"></div></div>
+      <p class="newinfo" id="szInfo"></p>
+      <p class="note warn" id="szWarn" hidden></p>
+    </div>
+    <p class="note">サイズを変えると、それより前の操作は「元に戻す」で戻せなくなります。念のため、先に「書き出し」→「作品ファイル（.zip）」で保存しておくと安心です。</p>
+    <div class="actions"><button class="btn" data-close>キャンセル</button><button class="btn primary" id="bSzOk">変更する</button></div>
+  </div>
+</div>
+
 <div class="modal" id="mExport" hidden>
   <div class="card" role="dialog" aria-modal="true" aria-labelledby="mExpT">
     <h3 id="mExpT">書き出し</h3>
     <img id="expImg" alt="書き出す絵のプレビュー">
     <p class="note" id="expNote"></p>
     <div class="expsize" id="expSize">
-      <div class="group" style="gap:14px"><label>幅 <input type="number" class="numin" id="exW" min="16"> px</label><label>高さ <input type="number" class="numin" id="exH" min="16"> px</label></div>
+      <div class="group" style="gap:14px"><label>幅 <input type="number" class="numin" id="exW" min="1" step="any"> <span class="exU">px</span></label><label>高さ <input type="number" class="numin" id="exH" min="1" step="any"> <span class="exU">px</span></label></div>
       <div class="group"><button class="btn sm" data-exs="1">100%</button><button class="btn sm" data-exs=".75">75%</button><button class="btn sm" data-exs=".5">50%</button><button class="btn sm" data-exs=".25">25%</button>
         <label style="margin-left:8px">解像度 <input type="number" class="numin" id="exDpi" min="1" max="2400"> dpi</label></div>
       <label class="check"><input type="checkbox" id="c_exKeep" checked> 印刷サイズを保つ（解像度も一緒に変える）</label>
@@ -587,6 +614,11 @@ const ICONS={
  text:'<path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/>',
  hand:'<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11 11.5V4a1.5 1.5 0 0 1 3 0v7.5"/><path d="M14 11.5V5.5a1.5 1.5 0 0 1 3 0V13"/><path d="M17 9.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-4.6-2.2L4.6 15.6a1.6 1.6 0 0 1 2.4-2.1L8 14.6"/>'
 };
+/* length display: canvas pixels or millimetres (via the document's dpi) */
+const uDpi=()=>(D&&D.dpi)||350;
+const toU=(px,dpi)=>S.unit==='mm'?Math.round(px/(dpi||uDpi())*25.4*10)/10:Math.round(px);
+const fromU=(v,dpi)=>S.unit==='mm'?v/25.4*(dpi||uDpi()):v;
+function fmtLen(px,dpi){if(S.unit!=='mm')return(px<10&&px%1?px.toFixed(1):Math.round(px))+'px';const mm=px/(dpi||uDpi())*25.4;return(mm<1?mm.toFixed(2):mm<10?mm.toFixed(1):Math.round(mm))+'mm';}
 const PENCILS=[{n:'色鉛筆（今の色）',col:null,soft:.5},{n:'鉛筆 HB',col:'#55565C',soft:.3},{n:'鉛筆 2B',col:'#38393E',soft:.55},{n:'鉛筆 6B',col:'#202024',soft:.85}];
 const EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
 const PAPERS=[
@@ -613,7 +645,7 @@ const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==
 const S={tool:'marker',color:'#F5C9AE',cname:'フレッシュ',sizes:{marker0:14,marker1:14,marker2:3,pen:4,pencil:2.5,airbrush:60,eraser:30,blur:40},
  taper:{marker0:[36,90],marker2:[8,20],pen:[18,54],pencil:[8,18]},
  minSz:{marker0:.1,marker2:.7,pen0:.04,pen1:.15,pen2:.92,pencil:.75},
- nib:0,mkDen:.85,inkLvl:1,mkDry:2.5,mkMix:true,mkMixV:2,nibAng:55,tiltAng:true,blender:false,airType:0,airFlow:.45,airHard:.2,tfKeep:true,tfQ:1,smart:true,stab:.15,pressure:true,phard:.5,
+ nib:0,mkDen:.85,inkLvl:1,mkDry:2.5,mkMix:true,mkMixV:2,nibAng:55,tiltAng:true,blender:false,airType:0,airFlow:.45,airHard:.2,tfKeep:true,tfQ:1,smart:true,unit:'px',stab:.15,pressure:true,phard:.5,
  penType:0,ink:.85,pencilType:0,pden:.65,ptilt:true,blurStr:.6,eHard:.6,strength:.9,selShape:0,fillRef:1,fillTol:.1,fillExp:2,rulerKind:0,snap:true,toolOrder:null,font:0,tsize:36,lh:1.3,fuchi:0,fuchiCol:0,vert:true,bold:true,
  paper:5,grain:.5,light:135,recent:[],layout:null,pickerMode:'wheel',maskTarget:0};
 try{const sv=JSON.parse(localStorage.getItem('enogubako.v4')||localStorage.getItem('enogubako.v3')||'null');if(sv&&!sv.taper)delete sv.stab;if(sv){const sz=Object.assign({},S.sizes,sv.sizes||{}),tp=Object.assign({},S.taper,sv.taper||{}),ms=Object.assign({},S.minSz,sv.minSz||{});Object.assign(S,sv);S.sizes=sz;S.taper=tp;S.minSz=ms;if(sv.mkMixV!==2){if(typeof sv.mkMix==='boolean')S.mkMix=!sv.mkMix;S.mkMixV=2;}}}catch(e){}
@@ -908,6 +940,10 @@ void main(){vec2 p=gl_FragCoord.xy;vec2 sc=uSrcSz/uDstSz;vec3 c=vec3(0.);
   for(int y=0;y<4;y++)for(int x=0;x<4;x++)c+=texelFetch(uSrc,clamp(i+ivec2(x-1,y-1),ivec2(0),mx),0).rgb*wx[x]*wy[y];}
  else{for(int j=0;j<8;j++){if(j>=uN)break;for(int i=0;i<8;i++){if(i>=uN)break;vec2 q=(floor(p)+(vec2(i,j)+.5)/float(uN))*sc;c+=textureLod(uSrc,q/uSrcSz,uLod).rgb;}}c/=float(uN*uN);}
  o=vec4(l2s(clamp(c,0.,1.)),1.);}`,
+rsz:`uniform sampler2D uC,uG;uniform vec2 uSrc,uDst;uniform int uN;`+MRT+`
+void main(){vec2 p=floor(gl_FragCoord.xy);vec2 k=uSrc/uDst;vec4 ac=vec4(0.),ag=vec4(0.);float n=float(uN);
+ for(int j=0;j<6;j++){if(j>=uN)break;for(int i=0;i<6;i++){if(i>=uN)break;vec2 q=(p+(vec2(i,j)+.5)/n)*k;vec4 c=texture(uC,q/uSrc);ac+=vec4(c.rgb*c.a,c.a);ag+=texture(uG,q/uSrc);}}
+ ac/=n*n;ag/=n*n;oC=vec4(ac.a>1e-4?ac.rgb/ac.a:vec3(0.),ac.a);oH=ag;}`,
 unpaper:`uniform sampler2D uW,uB;out vec4 o;
 void main(){ivec2 p=ivec2(gl_FragCoord.xy);vec3 w=texelFetch(uW,p,0).rgb,b=texelFetch(uB,p,0).rgb;vec3 v=clamp(w-b,0.,1.);
  float a=clamp(max(1.-min(w.r,min(w.g,w.b)),1.-max(v.r,max(v.g,v.b))),0.,1.);
@@ -1225,7 +1261,9 @@ function rdp(P,eps){if(P.length<3)return P.slice();let mi=0,md=0;const a=P[0],b=
  if(md<=eps)return[a,b];const l=rdp(P.slice(0,mi+1),eps),r=rdp(P.slice(mi),eps);return l.slice(0,-1).concat(r);}
 function segDist(p,a,b){const dx=b[0]-a[0],dy=b[1]-a[1],l2=dx*dx+dy*dy||1e-9;const t=clamp(((p[0]-a[0])*dx+(p[1]-a[1])*dy)/l2,0,1);return Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy);}
 function polyDev(P,V,closed){const segs=[];for(let i=0;i<V.length-1;i++)segs.push([V[i],V[i+1]]);if(closed)segs.push([V[V.length-1],V[0]]);let m=0;for(const p of P){let d=1e9;for(const [a,b] of segs)d=Math.min(d,segDist(p,a,b));m=Math.max(m,d);}return m;}
-function recognize(P){if(P.length<6)return null;let len=0;for(let i=1;i<P.length;i++)len+=Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]);if(len<8)return null;
+function resampleP(P,n){const cum=[0];for(let i=1;i<P.length;i++)cum.push(cum[i-1]+Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]));const L=cum[cum.length-1];if(L<=0)return P;
+ const out=[];let j=0;for(let k=0;k<=n;k++){const s0=L*k/n;while(j<cum.length-2&&cum[j+1]<s0)j++;const seg=cum[j+1]-cum[j]||1;const f=clamp((s0-cum[j])/seg,0,1);out.push([P[j][0]+(P[j+1][0]-P[j][0])*f,P[j][1]+(P[j+1][1]-P[j][1])*f]);}return out;}
+function recognize(P){if(P.length<6)return null;P=resampleP(P,160);let len=0;for(let i=1;i<P.length;i++)len+=Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]);if(len<8)return null;
  const a=P[0],b=P[P.length-1],gap=Math.hypot(b[0]-a[0],b[1]-a[1]);
  // straight line
  if(gap>len*.8){let m=0;for(const p of P)m=Math.max(m,segDist(p,a,b));if(m<Math.max(3/V.scale,gap*.05))return{kind:'line',name:'直線',pts:[a,b],closed:false};}
@@ -1267,7 +1305,7 @@ function recognize(P){if(P.length<6)return null;let len=0;for(let i=1;i<P.length
     w*=.97;hh*=.97;const C=(s1,s2)=>[mx+ux*w*s1-uy*hh*s2,my+uy*w*s1+ux*hh*s2];Vp=[C(-1,-1),C(1,-1),C(1,1),C(-1,1)];
     const st0=V0[0];let bi=0,bd=1e9;Vp.forEach((q,i)=>{const d=Math.hypot(q[0]-st0[0],q[1]-st0[1]);if(d<bd){bd=d;bi=i;}});Vp=Vp.slice(bi).concat(Vp.slice(0,bi));name='長方形';}}
   return{kind:'poly',name,pts:Vp,closed:true};}
- if(edev<R0*.13&&Math.abs(cov)>Math.PI*1.45&&R0*V.scale>6){if(ra/rb<1.15){const r=(ra+rb)/2;ra=rb=r;}const sgn=cov>0?1:-1;const u0=(P[0][0]-cx)*ca+(P[0][1]-cy)*sa,v0=-(P[0][0]-cx)*sa+(P[0][1]-cy)*ca;const th0=Math.atan2(v0/rb,u0/ra);
+ if(edev<R0*.17&&Math.abs(cov)>Math.PI*1.35&&R0*V.scale>6){if(ra/rb<1.15){const r=(ra+rb)/2;ra=rb=r;}const sgn=cov>0?1:-1;const u0=(P[0][0]-cx)*ca+(P[0][1]-cy)*sa,v0=-(P[0][0]-cx)*sa+(P[0][1]-cy)*ca;const th0=Math.atan2(v0/rb,u0/ra);
   const n=Math.max(48,Math.ceil(Math.PI*2*Math.max(ra,rb)/2));const pts=[];for(let i=0;i<=n+2;i++){const t=th0+sgn*i/n*Math.PI*2;const u=Math.cos(t)*ra,v=Math.sin(t)*rb;pts.push([cx+u*ca-v*sa,cy+u*sa+v*ca]);}
   return{kind:'ellipse',name:ra===rb?'円':'だ円',pts,closed:false,dense:true,c:[cx,cy]};}
  // open polyline (2-3 segments)
@@ -1948,20 +1986,20 @@ PENCILS.forEach((f,i)=>{const o=document.createElement('option');o.value=i;o.tex
 
 const tp=i=>()=>(S.taper[tkey(S.tool)]||[0,0])[i];
 const RANGES={
- size:{get:()=>Math.round(Math.log((S.sizes[tkey(S.tool)]||10)/.5)/Math.log(1200)*1000),set:v=>{S.sizes[tkey(S.tool)]=.5*Math.pow(1200,v/1000)},fmt:()=>{const s=S.sizes[tkey(S.tool)]||0;return (s<10?s.toFixed(1):Math.round(s))+'px'}},
+ size:{get:()=>Math.round(Math.log((S.sizes[tkey(S.tool)]||10)/.5)/Math.log(1200)*1000),set:v=>{S.sizes[tkey(S.tool)]=.5*Math.pow(1200,v/1000)},fmt:()=>{const s=S.sizes[tkey(S.tool)]||0;return fmtLen(s)}},
  minsz:{get:()=>Math.round(minSzOf(S.tool)*100),set:v=>{(S.minSz=S.minSz||{})[mkey(S.tool)]=v/100;},fmt:()=>Math.round(minSzOf(S.tool)*100)+'%'},
  stab:{get:()=>Math.round(S.stab*100),set:v=>S.stab=v/100,fmt:()=>S.stab<.005?'なし':Math.round(S.stab*100)},
- iri:{get:()=>Math.round(Math.sqrt(tp(0)()/600)*1000),set:v=>{(S.taper[tkey(S.tool)]=S.taper[tkey(S.tool)]||[0,0])[0]=Math.round(600*(v/1000)**2);},fmt:()=>tp(0)()?tp(0)()+'px':'なし'},
- nuki:{get:()=>Math.round(Math.sqrt(tp(1)()/600)*1000),set:v=>{(S.taper[tkey(S.tool)]=S.taper[tkey(S.tool)]||[0,0])[1]=Math.round(600*(v/1000)**2);},fmt:()=>tp(1)()?tp(1)()+'px':'なし'},
+ iri:{get:()=>Math.round(Math.sqrt(tp(0)()/600)*1000),set:v=>{(S.taper[tkey(S.tool)]=S.taper[tkey(S.tool)]||[0,0])[0]=Math.round(600*(v/1000)**2);},fmt:()=>tp(0)()?fmtLen(tp(0)()):'なし'},
+ nuki:{get:()=>Math.round(Math.sqrt(tp(1)()/600)*1000),set:v=>{(S.taper[tkey(S.tool)]=S.taper[tkey(S.tool)]||[0,0])[1]=Math.round(600*(v/1000)**2);},fmt:()=>tp(1)()?fmtLen(tp(1)()):'なし'},
  mkden:{k:'mkDen'},inklvl:{k:'inkLvl'},
  nibang:{get:()=>S.nibAng,set:v=>S.nibAng=v,fmt:()=>S.nibAng+'°'},
  ink:{k:'ink',fmt:()=>S.ink>=.99?'無限':Math.round(S.ink*100)},pden:{k:'pden'},blurstr:{k:'blurStr'},ehard:{k:'eHard'},strength:{k:'strength'},phard:{k:'phard'},
- tsize:{get:()=>S.tsize,set:v=>S.tsize=v,fmt:()=>S.tsize+'px',text:true},lh:{get:()=>Math.round(S.lh*100),set:v=>S.lh=v/100,fmt:()=>S.lh.toFixed(2),text:true},
- fuchi:{get:()=>S.fuchi,set:v=>S.fuchi=v,fmt:()=>S.fuchi?S.fuchi+'px':'なし'},
+ tsize:{get:()=>S.tsize,set:v=>S.tsize=v,fmt:()=>fmtLen(S.tsize),text:true},lh:{get:()=>Math.round(S.lh*100),set:v=>S.lh=v/100,fmt:()=>S.lh.toFixed(2),text:true},
+ fuchi:{get:()=>S.fuchi,set:v=>S.fuchi=v,fmt:()=>S.fuchi?fmtLen(S.fuchi):'なし'},
  aflow:{get:()=>Math.round(S.airFlow*100),set:v=>S.airFlow=v/100,fmt:()=>Math.round(S.airFlow*100)},
  ahard:{get:()=>Math.round(S.airHard*100),set:v=>S.airHard=v/100,fmt:()=>Math.round(S.airHard*100)},
  ftol:{get:()=>Math.round(S.fillTol*100),set:v=>S.fillTol=v/100,fmt:()=>Math.round(S.fillTol*100)},
- fexp:{get:()=>S.fillExp,set:v=>S.fillExp=v,fmt:()=>S.fillExp?S.fillExp+'px':'なし'},
+ fexp:{get:()=>S.fillExp,set:v=>S.fillExp=v,fmt:()=>S.fillExp?fmtLen(S.fillExp):'なし'},
  grain:{k:'grain',scale:2,live:true},light:{get:()=>S.light,set:v=>S.light=v,fmt:()=>S.light+'°',live:true}};
 for(const id in RANGES){const r=RANGES[id];const el=$('#r_'+id);
  r.get=r.get||(()=>Math.round(S[r.k]/(r.scale||1)*100));r.set=r.set||(v=>S[r.k]=v/100*(r.scale||1));r.fmt=r.fmt||(()=>Math.round(S[r.k]/(r.scale||1)*100));
@@ -1982,6 +2020,7 @@ function syncUI(){for(const id in RANGES){const r=RANGES[id];$('#r_'+id).value=r
  $$('#selShapeSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.shape===S.selShape));
  $$('#fillRefSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.ref===S.fillRef));
  $$('#airSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.air===(S.airType|0)));$$('#mixSeg button').forEach(b=>b.setAttribute('aria-pressed',(b.dataset.mix==='1')===!!S.mkMix));$('#c_tfkeep').checked=!!S.tfKeep;$('#s_tfq').value=S.tfQ?1:0;
+ $$('#unitSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.u===(S.unit||'px')));
  $$('#rulerSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.rk===S.rulerKind));$('#c_snap').checked=!!S.snap;
  $('#fuchiW').setAttribute('aria-pressed',S.fuchiCol===0);$('#fuchiB').setAttribute('aria-pressed',S.fuchiCol===1);
  $$('.tool').forEach(b=>b.setAttribute('aria-pressed',b.dataset.tool===S.tool));
@@ -1996,6 +2035,41 @@ $('#bPick').onclick=()=>{picking=true;updCursorSize();toast('取りたい色を�
 
 $('#bUndo').onclick=doUndo;$('#bRedo').onclick=doRedo;
 $('#bFit').onclick=fit;
+$$('#unitSeg button').forEach(b=>b.onclick=()=>{S.unit=b.dataset.u;saveSettings();syncUI();updStatus();});
+/* ---------- canvas size / resolution ---------- */
+let sz=null;
+function szUpd(){const mm=(v,d)=>(v/d*25.4).toFixed(1);$('#szW').value=toU(sz.w,sz.dpi);$('#szH').value=toU(sz.h,sz.dpi);$('#szDpi').value=sz.dpi;$$('.exU').forEach(e=>e.textContent=S.unit);
+ $$('#szMode button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.m===sz.mode));$('#szKeepF').hidden=sz.mode!==0;$('#szResF').hidden=sz.mode!==0;$('#szAnchorF').hidden=sz.mode!==1;
+ $$('#szAnchor button').forEach((b,i)=>b.setAttribute('aria-pressed',i===sz.anchor));
+ $('#szCur').textContent=`いま：${D.w} × ${D.h} px ・ ${D.dpi} dpi ・ ${mm(D.w,D.dpi)} × ${mm(D.h,D.dpi)} mm`;
+ $('#szInfo').textContent=`変更後：${sz.w} × ${sz.h} px ・ ${sz.dpi} dpi ・ ${mm(sz.w,sz.dpi)} × ${mm(sz.h,sz.dpi)} mm`+(sz.w===D.w&&sz.h===D.h?(sz.dpi===D.dpi?'（変更なし）':'（画素はそのままで解像度だけ変わります）'):sz.mode===0?`（絵を${Math.round(sz.w/D.w*1000)/10}%に拡大・縮小）`:'');
+ const ok=sz.w>=16&&sz.h>=16&&sz.w<=MAXTEX&&sz.h<=MAXTEX;const mb=Math.round(sz.w*sz.h*(38.5+D.layers.length*8)/1e6);
+ $('#szWarn').hidden=ok&&mb<(IS_IOS?450:1600);$('#szWarn').textContent=!ok?`一辺は16〜${MAXTEX}pxにしてください。`:`かなり大きいサイズです（GPUメモリの目安 約${mb}MB）。動作が重くなることがあります。`;$('#bSzOk').disabled=!ok;}
+(()=>{const a=$('#szAnchor');for(let i=0;i<9;i++){const b=document.createElement('button');b.setAttribute('aria-label',['左上','上','右上','左','中央','右','左下','下','右下'][i]);b.onclick=()=>{sz.anchor=i;szUpd();};a.appendChild(b);}})();
+$('#bCanvasSize').onclick=()=>{if(!D||stroke||mv)return;sz={w:D.w,h:D.h,dpi:D.dpi||350,mode:0,anchor:4};$('#c_szKeep').checked=true;$('#c_szRes').checked=false;openModal('#mSize');szUpd();};
+$$('#szMode button').forEach(b=>b.onclick=()=>{sz.mode=+b.dataset.m;szUpd();});
+$('#szW').addEventListener('change',e=>{const v=Math.round(fromU(+e.target.value,sz.dpi));if(!(v>0))return szUpd();if(sz.mode===0&&$('#c_szKeep').checked)sz.h=Math.max(1,Math.round(v*D.h/D.w));sz.w=v;szUpd();});
+$('#szH').addEventListener('change',e=>{const v=Math.round(fromU(+e.target.value,sz.dpi));if(!(v>0))return szUpd();if(sz.mode===0&&$('#c_szKeep').checked)sz.w=Math.max(1,Math.round(v*D.w/D.h));sz.h=v;szUpd();});
+$('#szDpi').addEventListener('change',e=>{const v=clamp(Math.round(+e.target.value||sz.dpi),1,2400);if(sz.mode===0&&$('#c_szRes').checked){sz.w=Math.max(1,Math.round(sz.w*v/sz.dpi));sz.h=Math.max(1,Math.round(sz.h*v/sz.dpi));}sz.dpi=v;szUpd();});
+$('#bSzOk').onclick=async()=>{const z=sz;closeModals();if(z.w===D.w&&z.h===D.h){if(z.dpi!==D.dpi){D.dpi=z.dpi;changed();updStatus();syncUI();toast('解像度を変更しました');}return;}
+ toast('サイズを変更しています…');await new Promise(r=>setTimeout(r,30));try{resizeDoc(z.w,z.h,z.dpi,z.mode,z.anchor);}catch(err){console.error(err);toast('サイズを変更できませんでした：'+(err.message||err));}};
+function resizeDoc(nw,nh,dpi,mode,anchor){if(stroke||mv)return;if(tf)tfCommit();if(txt)commitText();settle(D);
+ const o=D;let ox=0,oy=0;if(mode===1){ox=Math.round((nw-o.w)*(anchor%3)/2);oy=Math.round((nh-o.h)*Math.floor(anchor/3)/2);}
+ const d=createDoc(nw,nh,o.tint,o.paperType,{id:o.id,name:o.name,created:o.created,dpi});
+ const kx=nw/o.w,ky=nh/o.h,N=clamp(Math.ceil(Math.max(1/kx,1/ky)),1,6);
+ const copy=(sf,dfb,st,dt,isMask)=>{if(mode===1){const x0=Math.max(0,ox),y0=Math.max(0,oy),x1=Math.min(nw,ox+o.w),y1=Math.min(nh,oy+o.h);if(x1>x0&&y1>y0)blit2(sf,dfb,[x0-ox,y0-oy,x1-ox,y1-oy],[x0,y0,x1,y1]);}
+  else{target(dfb,nw,nh);use(P.rsz,{uC:T(st[0]),uG:T(st[1]),uSrc:[o.w,o.h],uDst:[nw,nh],uN:I(N)});draw();}};
+ for(const L of o.layers){const fol=isFolder(L);const Nl=fol?newFolder(d,L.name):newLayer(d,L.name);cloneProps(Nl,L);cloneOl(Nl,L);if(fol)Nl.open=L.open;
+  if(mode===0&&Nl.ol)Nl.ol.w=clamp(Math.round(Nl.ol.w*Math.sqrt(kx*ky)),1,100);
+  if(!fol){if(mode===1){copy(L.fCol,Nl.fCol,null,null);copy(L.fGH,Nl.fGH,null,null);}
+   else{const fb=mkFB(Nl.col,Nl.gh);copy(null,fb,[L.col,L.gh]);gl.deleteFramebuffer(fb);}}
+  if(L.mask){Nl.mask=makeMask(d,1);Nl.maskOn=L.maskOn;if(mode===1)copy(L.mask.f,Nl.mask.f);else copy(null,Nl.mask.f,[L.mask.t,L.mask.t]);}
+  d.layers.push(Nl);}
+ o.layers.forEach((L,i)=>{d.layers[i].parent=L.parent?d.layers[o.layers.indexOf(L.parent)]||null:null;});
+ d.active=o.active;d.tl=o.tl;d.tlN=o.tlN;
+ if(o.ruler){const r=JSON.parse(JSON.stringify(o.ruler));const f=q=>q&&(mode===0?[q[0]*kx,q[1]*ky]:[q[0]+ox,q[1]+oy]);r.a=f(r.a);r.b=f(r.b);d.ruler=r;}
+ if(gl.getError()===gl.OUT_OF_MEMORY){freeDoc(d);throw new Error('GPUのメモリが足りません');}
+ setDoc(d,true);fit();renderLayers();updStatus();syncUI();toast(`キャンバスを ${nw}×${nh}px・${dpi}dpi にしました`);}
 function toggleClear(){S.clearInk=!S.clearInk;saveSettings();syncUI();toast(S.clearInk?'透明色にしました。描いた所が消えます':'透明色をやめました');}
 $('#bClearInk').onclick=toggleClear;
 $('#bFlipTop').onclick=$('#bVFlip').onclick=()=>setViewFlip(!V.flip);
@@ -2202,12 +2276,12 @@ function renderLayers(){if(!D)return;const box=$('#layers');box.innerHTML='';
  $('#iMask').setAttribute('aria-pressed',!!(L.mask&&L.maskOn));$('#iMask').title=L.mask?(L.maskOn?'レイヤーマスク：有効（クリックで無効にする）':'レイヤーマスク：無効（クリックで有効にする）'):'レイヤーマスクを追加（Shift+クリックで全体を隠すマスク）';
  $('#mHide').setAttribute('aria-pressed',!S.maskTarget);$('#mShow').setAttribute('aria-pressed',!!S.maskTarget);$('#mBrushSeg').hidden=!D.editMask;
  $('#maskChip').hidden=!(D.editMask&&L.mask);
- const ol=L.ol||(L.ol={on:false,color:'#FFFFFF',w:6});$('#c_ol').checked=ol.on;$('#olRows').hidden=!ol.on;$('#olColor').value=ol.color.toLowerCase();$('#olHex').value=ol.color;$('#r_olw').value=ol.w;$('#o_olw').textContent=ol.w+'px';}
+ const ol=L.ol||(L.ol={on:false,color:'#FFFFFF',w:6});$('#c_ol').checked=ol.on;$('#olRows').hidden=!ol.on;$('#olColor').value=ol.color.toLowerCase();$('#olHex').value=ol.color;$('#r_olw').value=ol.w;$('#o_olw').textContent=fmtLen(ol.w)||ol.w+'px';}
 function olChanged(){const L=actL(D);L.fxR='all';markAll(D);D.belowValid=false;changed();}
 $('#c_ol').onchange=e=>{const L=actL(D);L.ol.on=e.target.checked;if(!L.ol.on){delTex(L.olT);delFB(L.fOl);L.olT=null;L.fOl=null;}L.olW=null;olChanged();renderLayers();};
 $('#olColor').addEventListener('input',e=>{actL(D).ol.color=e.target.value.toUpperCase();$('#olHex').value=actL(D).ol.color;markAll(D);D.belowValid=false;changed();});
 $('#olHex').addEventListener('change',e=>{let v=e.target.value.trim();if(!v.startsWith('#'))v='#'+v;if(/^#[0-9a-f]{6}$/i.test(v)){actL(D).ol.color=v.toUpperCase();$('#olColor').value=v.toLowerCase();markAll(D);D.belowValid=false;changed();}else e.target.value=actL(D).ol.color;});
-$('#r_olw').addEventListener('input',e=>{actL(D).ol.w=+e.target.value;$('#o_olw').textContent=e.target.value+'px';changed();});
+$('#r_olw').addEventListener('input',e=>{actL(D).ol.w=+e.target.value;$('#o_olw').textContent=fmtLen(+e.target.value);changed();});
 function bakeLayer(L){updateFx(D);const M=newLayer(D,L.name);cloneProps(M,L);if(L.mask){M.mask=makeMask(D,1);blitAll(L.mask.f,M.mask.f,D);}
  target(D.fMRT,D.w,D.h);use(P.olBake,{uCol:T(L.col),uGH:T(L.gh),uOL:T(L.olT),uOLOn:I(1),uOLW:L.ol.w*D.sizeK,uOLC:hex2lin(L.ol.color)});draw();
  blitAll(D.fS1,M.fCol,D);blitAll(D.fS2,M.fGH,D);return M;}
@@ -2306,7 +2380,7 @@ function buildNew(){const so=$('#sizeOpts'),po=$('#paperOpts'),to=$('#tintOpts')
  PAPER_ORDER.forEach(i=>{const p=PAPERS[i];const b=document.createElement('button');b.className='opt';b.textContent=p.n;b.setAttribute('aria-pressed',i===nSel.paper);b.onclick=()=>{nSel.paper=i;buildNew();};po.appendChild(b);});
  TINTS.forEach(([n,h],i)=>{const b=document.createElement('button');b.className='papc';b.style.background=h;b.title=n;b.setAttribute('aria-label',n);b.setAttribute('aria-pressed',i===nSel.tint);b.onclick=()=>{nSel.tint=i;buildNew();};to.appendChild(b);});
  const z=SIZES[nSel.size];$('#customF').hidden=!z.custom;$('#orientF').hidden=!z.mm;$('#oPort').setAttribute('aria-pressed',nSel.portrait);$('#oLand').setAttribute('aria-pressed',!nSel.portrait);
- $('#cW').value=nSel.cw;$('#cH').value=nSel.ch;updNewInfo();}
+ $('#cW').value=toU(nSel.cw,nSel.dpi);$('#cH').value=toU(nSel.ch,nSel.dpi);$$('.exU').forEach(e=>e.textContent=S.unit);updNewInfo();}
 function updNewInfo(){const [w,h]=newDims();const mp=w*h/1e6;const base=Math.round(w*h*38.5/1e6),mk=Math.round(w*h*59.5/1e6);
  const mm=nSel.dpi?` ・ ${(w/nSel.dpi*25.4).toFixed(0)}×${(h/nSel.dpi*25.4).toFixed(0)}mm`:'';
  $('#newInfo').textContent=`${w} × ${h} px（${mp.toFixed(1)}メガピクセル）・ ${nSel.dpi} dpi${mm}　GPUメモリの目安 約${base}MB（マーカー使用時 約${mk}MB）`;
@@ -2314,7 +2388,7 @@ function updNewInfo(){const [w,h]=newDims();const mp=w*h/1e6;const base=Math.rou
  warn.hidden=ok&&mk<(IS_IOS?450:1400);warn.textContent=!ok?`このGPUで扱える最大サイズは一辺${MAXTEX}pxです。サイズか解像度を下げてください。`:IS_IOS?'iPadでは使えるメモリが限られるため、このサイズだと描画が止まることがあります。A4なら350dpi以下、マーカーを使うなら300dpi以下が目安です。':'とても大きいため、パソコンによっては動作が重くなったり描画が止まったりします。モノクロの線画なら600dpi、カラーなら350dpiが目安です。';
  $('#bCreate').disabled=!ok;}
 $('#oPort').onclick=()=>{nSel.portrait=true;buildNew();};$('#oLand').onclick=()=>{nSel.portrait=false;buildNew();};
-$('#cW').addEventListener('input',e=>{nSel.cw=+e.target.value;updNewInfo();});$('#cH').addEventListener('input',e=>{nSel.ch=+e.target.value;updNewInfo();});
+$('#cW').addEventListener('input',e=>{nSel.cw=Math.round(fromU(+e.target.value,nSel.dpi));updNewInfo();});$('#cH').addEventListener('input',e=>{nSel.ch=Math.round(fromU(+e.target.value,nSel.dpi));updNewInfo();});
 $('#wNew').onclick=()=>{$('#c_newTl').checked=false;nSel.paper=S.paper;buildNew();openModal('#mNew');};
 $('#bCreate').onclick=async()=>{const [w,h]=newDims();const z=SIZES[nSel.size];const dpi=z.px?72:nSel.dpi;S.paper=nSel.paper;saveSettings();closeModals();
  await saveNow(false);hideHint();
@@ -2338,7 +2412,7 @@ function changed(){isDirty=true;changeAt=performance.now();demoDoc=false;tlDirty
 function updStatus(){if(!D)return;const s=$('#status');s.classList.toggle('dirty',isDirty&&!demoDoc);
  s.textContent=saving?'保存中…':(isDirty&&!demoDoc)?'未保存の変更':savedAt?'保存済み '+new Date(savedAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}):'';
  if(D.tl){const r=document.createElement('span');r.className='rec';r.textContent=' ● 録画中';r.title='タイムラプスを記録しています';s.appendChild(r);}
- $('#wname').textContent=(D.name||'無題')+'　'+D.w+'×'+D.h+(D.dpi?' · '+D.dpi+'dpi':'');}
+ $('#wname').textContent=(D.name||'無題')+'　'+(S.unit==='mm'?Math.round(D.w/uDpi()*25.4)+'×'+Math.round(D.h/uDpi()*25.4)+'mm':D.w+'×'+D.h)+(D.dpi?' · '+D.dpi+'dpi':'');}
 const defaultName=()=>'無題 '+new Date().toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
 async function saveNow(manual){
  if(!idb.db){if(manual)toast('このブラウザでは保存できません。「書き出し」から作品ファイルを保存してください。');return;}
@@ -2534,12 +2608,12 @@ $('#bExport').onclick=async()=>{settle(D);const tw=Math.min(900,D.w),th=Math.max
   :`ここではファイルを直接保存できません。上のプレビューは縮小版です。`;
  $('#ePng').hidden=$('#eZip').hidden=$('#expSize').hidden=$('#tlSec').hidden=!DL;updTl();ex={w:D.w,h:D.h,dpi:D.dpi||72};exInfo();$('#c_exClear').checked=!!S.exClear;};
 let ex={w:0,h:0,dpi:350};
-function exInfo(){const mm=v=>(v/ex.dpi*25.4).toFixed(0);$('#exW').value=ex.w;$('#exH').value=ex.h;$('#exDpi').value=ex.dpi;
+function exInfo(){const mm=v=>(v/ex.dpi*25.4).toFixed(0);$('#exW').value=toU(ex.w,ex.dpi);$('#exH').value=toU(ex.h,ex.dpi);$('#exDpi').value=ex.dpi;$$('.exU').forEach(e=>e.textContent=S.unit);
  $('#exInfo').textContent=`${ex.w} × ${ex.h} px ・ ${ex.dpi} dpi ・ 約${mm(ex.w)}×${mm(ex.h)}mm`+(ex.w===D.w&&ex.h===D.h?'（元のサイズ）':`（元の${Math.round(ex.w/D.w*1000)/10}%）`);}
 function exScale(k,dpi){const kmin=16/Math.min(D.w,D.h),kmax=Math.min(4,MAXTEX/Math.max(D.w,D.h));k=clamp(k,kmin,kmax);
  ex.w=Math.max(1,Math.round(D.w*k));ex.h=Math.max(1,Math.round(D.h*k));if(dpi)ex.dpi=dpi;else if($('#c_exKeep').checked)ex.dpi=Math.max(1,Math.round((D.dpi||72)*k));exInfo();}
-$('#exW').addEventListener('change',e=>exScale((+e.target.value||D.w)/D.w));
-$('#exH').addEventListener('change',e=>exScale((+e.target.value||D.h)/D.h));
+$('#exW').addEventListener('change',e=>exScale((fromU(+e.target.value,ex.dpi)||D.w)/D.w));
+$('#exH').addEventListener('change',e=>exScale((fromU(+e.target.value,ex.dpi)||D.h)/D.h));
 $('#exDpi').addEventListener('change',e=>{const v=clamp(Math.round(+e.target.value||ex.dpi),1,2400);if($('#c_exKeep').checked)exScale(v/(D.dpi||72),v);else{ex.dpi=v;exInfo();}});
 $$('[data-exs]').forEach(b=>b.onclick=()=>exScale(+b.dataset.exs));
 async function offer(filename,data){if(!DL){toast('この画面ではファイルを保存できません');return;}
