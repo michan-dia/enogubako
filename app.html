@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="enogu-build" content="202611101611">
+<meta name="enogu-build" content="202611101622">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' data: blob:">
 <title>絵具箱</title>
 <link rel="stylesheet" href="fonts/fonts.css">
@@ -810,7 +810,11 @@ void put2(vec4 L,vec3 Gz,float h,float cov,float gk,bool er){
  else{vec3 g2=mix(Gz,vec3(1.),cov*gk);
   /* the layer's glaze multiplies its paint, so paint laid over glaze is pre-divided by what is left of it:
      a soft edge then reads as paint over the glazed colour instead of turning muddy grey */
-  vec3 cc=clamp(uColor/max(g2,vec3(.02)),0.,1.);oC=depositO(L,cc,cov);oH=vec4(g2,h);}}
+  vec3 cc=clamp(uColor/max(g2,vec3(.02)),0.,1.);oC=depositO(L,cc,cov);
+  /* opaque marker ink laid thinly: the part that does not cover is kept as a dye tint, so over white a coat of strength cov
+     reads as colour^cov exactly like the transparent ink, instead of colour washed out with white */
+  if(uMkOpq==1&&cov<.999)g2*=clamp(pow(uColor,vec3(cov))/max(mix(vec3(1.),uColor,cov),vec3(1e-4)),0.,1.);
+  oH=vec4(g2,h);}}
 void put(vec4 L,vec3 Gz,float h,float cov,float gk){put2(L,Gz,h,cov,gk,false);}
 void body(ivec2 p,vec4 L,vec4 GH,float g){float h=GH.a;vec3 Gz=GH.rgb;
  vec2 d=gl_FragCoord.xy-uCenter;float rpx=length(d);
