@@ -815,13 +815,17 @@ void put2(vec4 L,vec3 Gz,float h,float cov,float gk,bool er){
  L=texelFetch(uInkBase,q,0);vec4 Gb=texelFetch(uPreBase,q,0);Gz=Gb.rgb;h=Gb.a;cov=m*uOp;
 #endif
  if(er||uClear==1){oC=vec4(L.rgb,L.a*(1.-cov));oH=vec4(mix(Gz,vec3(1.),cov),h*(1.-cov));}
- else{vec3 g2=mix(Gz,vec3(1.),cov*gk);
+ else{
+  /* paint goes over this layer's glaze: keep the glaze and lay the paint pre-divided by it (exact layering), lifting the glaze
+     only as far as a lighter paint needs and only as much as it covers, so soft edges show neither a grey nor a white rim */
+  vec3 kk=clamp((uColor-Gz)/max(vec3(1.)-Gz,vec3(1e-4)),0.,1.);float kx=max(kk.r,max(kk.g,kk.b));
+  vec3 g2=mix(Gz,vec3(1.),kx*cov);
   /* the layer's glaze multiplies its paint, so paint laid over glaze is pre-divided by what is left of it:
      a soft edge then reads as paint over the glazed colour instead of turning muddy grey */
   vec3 cc=clamp(uColor/max(g2,vec3(.02)),0.,1.);oC=depositO(L,cc,cov);
   /* opaque marker ink laid thinly: the part that does not cover is kept as a dye tint, so over white a coat of strength cov
      reads as colour^cov exactly like the transparent ink, instead of colour washed out with white */
-  if(uMkOpq==1&&cov<.999)g2*=clamp(pow(uColor,vec3(cov))/max(mix(vec3(1.),uColor,cov),vec3(1e-4)),0.,1.);
+  if(uMkOpq==1&&cov<.999)g2*=pow(clamp(pow(uColor,vec3(cov))/max(mix(vec3(1.),uColor,cov),vec3(1e-4)),0.,1.),vec3(min(Gz.r,min(Gz.g,Gz.b))));
   oH=vec4(g2,h);}}
 void put(vec4 L,vec3 Gz,float h,float cov,float gk){put2(L,Gz,h,cov,gk,false);}
 void body(ivec2 p,vec4 L,vec4 GH,float g){float h=GH.a;vec3 Gz=GH.rgb;
