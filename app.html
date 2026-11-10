@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="enogu-build" content="202611101554">
+<meta name="enogu-build" content="202611101558">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' data: blob:">
 <title>絵具箱</title>
 <link rel="stylesheet" href="fonts/fonts.css">
@@ -350,6 +350,7 @@ select{height:30px;border-radius:6px;border:1px solid var(--line);background:var
           <label class="row" data-t="pencil"><span class="lab">芯</span><select id="s_pencil"></select><span></span></label>
           <label class="row" data-t="marker pen pencil airbrush eraser blur"><span class="lab">サイズ</span><input type="range" id="r_size" min="0" max="1000"><output id="o_size"></output></label>
           <label class="row" data-t="marker pen pencil airbrush eraser"><span class="lab">不透明度</span><input type="range" id="r_op" min="1" max="100"><output id="o_op"></output></label>
+          <label class="check" data-t="marker pen pencil airbrush eraser"><input type="checkbox" id="c_opPress"> 筆圧で不透明度を変える（弱く押すと薄く、強く押すと設定した不透明度まで）</label>
           <label class="row" data-t="marker pen pencil" data-nonib="1"><span class="lab">最小サイズ</span><input type="range" id="r_minsz" min="0" max="100"><output id="o_minsz"></output></label>
           <label class="row" data-t="marker pen pencil airbrush eraser blur"><span class="lab">手ブレ補正</span><input type="range" id="r_stab" min="0" max="100"><output id="o_stab"></output></label>
           <label class="row" data-t="marker pen pencil" data-nonib="1"><span class="lab">入り</span><input type="range" id="r_iri" min="0" max="1000"><output id="o_iri"></output></label>
@@ -647,7 +648,7 @@ const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==
 const S={tool:'marker',color:'#F5C9AE',cname:'フレッシュ',sizes:{marker0:14,marker1:14,marker2:3,pen:4,pencil:2.5,airbrush:60,eraser:30,blur:40},
  taper:{marker0:[36,90],marker2:[8,20],pen:[18,54],pencil:[8,18]},
  minSz:{marker0:.1,marker2:.7,pen0:.04,pen1:.15,pen2:.92,pencil:.75},
- nib:0,mkDen:.85,inkLvl:1,mkDry:2.5,mkMix:true,mkMixV:2,nibAng:55,tiltAng:true,blender:false,airType:0,airFlow:.45,airHard:.2,tfKeep:true,tfQ:1,smart:true,unit:'px',ops:{},mkOpq:false,stab:.15,pressure:true,phard:.5,
+ nib:0,mkDen:.85,inkLvl:1,mkDry:2.5,mkMix:true,mkMixV:2,nibAng:55,tiltAng:true,blender:false,airType:0,airFlow:.45,airHard:.2,tfKeep:true,tfQ:1,smart:true,unit:'px',ops:{},opPress:{},mkOpq:false,stab:.15,pressure:true,phard:.5,
  penType:0,ink:.85,pencilType:0,pden:.65,ptilt:true,blurStr:.6,eHard:.6,strength:.9,selShape:0,fillRef:1,fillTol:.1,fillExp:2,rulerKind:0,snap:true,toolOrder:null,font:0,tsize:36,lh:1.3,fuchi:0,fuchiCol:0,vert:true,bold:true,
  paper:5,grain:.5,light:135,recent:[],layout:null,pickerMode:'wheel',maskTarget:0};
 try{const sv=JSON.parse(localStorage.getItem('enogubako.v4')||localStorage.getItem('enogubako.v3')||'null');if(sv&&!sv.taper)delete sv.stab;if(sv){const sz=Object.assign({},S.sizes,sv.sizes||{}),tp=Object.assign({},S.taper,sv.taper||{}),ms=Object.assign({},S.minSz,sv.minSz||{});Object.assign(S,sv);S.sizes=sz;S.taper=tp;S.minSz=ms;if(sv.mkMixV!==2){if(typeof sv.mkMix==='boolean')S.mkMix=!sv.mkMix;S.mkMixV=2;}}}catch(e){}
@@ -752,7 +753,7 @@ vec3 blendF(vec3 b,vec3 s,int m){
  if(m==24)return setLum(s,lumC(b));if(m==25)return setLum(b,lumC(s));return s;}
 `;
 const BRUSH=`
-uniform int uTool,uNib,uPenType,uBlender,uSelOn;uniform float uSeed,uRadius,uAngle,uPressure,uStep,uFlow,uBleed,uInkLvl,uNibAng,uEHard;uniform vec2 uCenter,uDS;uniform sampler2D uSel;
+uniform int uTool,uNib,uPenType,uBlender,uSelOn,uOpMax;uniform float uOpP,uSeed,uRadius,uAngle,uPressure,uStep,uFlow,uBleed,uInkLvl,uNibAng,uEHard;uniform vec2 uCenter,uDS;uniform sampler2D uSel;
 float selAt(ivec2 p){return uSelOn==1?texture(uSel,(vec2(p)+.5)/uDS).a:1.;}
 float streak(vec2 d){if(uInkLvl>.97)return 1.;vec2 uv=rot(-uAngle)*d/max(uRadius,1.);
  float s=.7*vn1(uv.y*(5.+uRadius*.22)+uSeed*9.)+.3*hash2(floor(gl_FragCoord.xy*.8)+uSeed);
@@ -802,7 +803,7 @@ uniform int uClear,uMkOpq;uniform float uOp;
    so overlapping dabs never build up past the brush's opacity. */
 void put2(vec4 L,vec3 Gz,float h,float cov,float gk,bool er){
 #ifdef OPM
- ivec2 q=ivec2(gl_FragCoord.xy);if(uSelOn==1&&uTool!=9)cov*=selAt(q);float m0=texelFetch(uMask,q,0).a;float m=m0+cov*(1.-m0);oM=vec4(0.,0.,0.,m);
+ ivec2 q=ivec2(gl_FragCoord.xy);if(uSelOn==1&&uTool!=9)cov*=selAt(q);float m0=texelFetch(uMask,q,0).a;float c=cov*uOpP;float m=uOpMax==1?max(m0,c):m0+c*(1.-m0);oM=vec4(0.,0.,0.,m);
  L=texelFetch(uInkBase,q,0);vec4 Gb=texelFetch(uPreBase,q,0);Gz=Gb.rgb;h=Gb.a;cov=m*uOp;
 #endif
  if(er||uClear==1){oC=vec4(L.rgb,L.a*(1.-cov));oH=vec4(mix(Gz,vec3(1.),cov),h*(1.-cov));}
@@ -836,7 +837,7 @@ void body(ivec2 p,vec4 L,vec4 GH,float g){float h=GH.a;vec3 Gz=GH.rgb;
    acc/=14.;ga/=14.;ha/=14.;float k=clamp(c*uStrength*min(1.,uStep*4.),0.,1.);
    vec4 pm=mix(vec4(L.rgb*L.a,L.a),acc,k);oC=vec4(pm.a>1e-4?pm.rgb/pm.a:L.rgb,pm.a);oH=vec4(mix(Gz,ga,k),mix(h,ha,k));return;}
  if(uTool==9&&(uClear==1||uMkOpq==1)){float m=clamp(markerCov(d,g)*selAt(p)*uMkDen,0.,1.);if(m>.001)put(L,Gz,h,m,1.);return;}
- if(uTool==9){float m=max(texelFetch(uMask,p,0).r,markerCov(d,g)*selAt(p));
+ if(uTool==9){float m=max(texelFetch(uMask,p,0).r,markerCov(d,g)*selAt(p)*uOpP);
    if(m<=.001)return;
    vec4 pre=texelFetch(uPreBase,p,0);vec4 ink0=texelFetch(uInkBase,p,0);
    if(ink0.a>.01){vec3 acc=ink0.rgb*ink0.a;float ws=ink0.a;
@@ -904,7 +905,7 @@ void main(){ivec2 p=ivec2(gl_FragCoord.xy);vec4 L=texelFetch(uCol,p,0),G=texelFe
  if(uClear==1){oC=vec4(L.rgb,L.a*(1.-m));oH=vec4(mix(G.rgb,vec3(1.),m),G.a*(1.-m));}else{oC=depositO(L,uColor,m);oH=vec4(mix(G.rgb,vec3(1.),m),G.a);}
  if(uALock==1){float pr=max(L.a,gpres(G.rgb));oC.a=clamp(oC.a,L.a,max(L.a,pr));oH=vec4(mix(G.rgb,oH.rgb,pr),G.a);}}`,
 mask:BRUSH+`uniform sampler2D uMask,uPaperT;out vec4 o;
-void main(){ivec2 p=ivec2(gl_FragCoord.xy);o=vec4(max(texelFetch(uMask,p,0).r,markerCov(gl_FragCoord.xy-uCenter,texelFetch(uPaperT,p,0).r)*selAt(p)));}`,
+void main(){ivec2 p=ivec2(gl_FragCoord.xy);o=vec4(max(texelFetch(uMask,p,0).r,markerCov(gl_FragCoord.xy-uCenter,texelFetch(uPaperT,p,0).r)*selAt(p)*uOpP));}`,
 
 mkMark:`uniform sampler2D uMask,uMkWet,uMkInk;layout(location=0) out vec4 oW;layout(location=1) out vec4 oI;
 void main(){ivec2 p=ivec2(gl_FragCoord.xy);float m=min(texelFetch(uMask,p,0).r,1.);oW=vec4(max(texelFetch(uMkWet,p,0).r,m>.004?max(m,.32):0.));oI=vec4(max(texelFetch(uMkInk,p,0).r,m));}`,
@@ -1234,7 +1235,7 @@ function dab(d,x,y,p,ang,o){
  const pc=PENCILS[S.pencilType]||PENCILS[0];
  const col=id===4&&pc.col?hex2lin(pc.col):hex2lin(S.color);
  const mk=id===9&&!stroke.clear&&!stroke.opq;const opm=!!stroke.op&&!mk;
- const u={uTool:I(id),uNib:I(S.nib|0),uPenType:I(air?(S.airType|0):(S.penType|0)),uBlender:I(S.blender?1:0),uSelOn:I(d.sel?1:0),uSel:T(d.selT||G.one),uDS:[d.w,d.h],
+ const u={uOpP:stroke.opPress?Math.min(1,Math.max(.03,p)):1,uOpMax:I(stroke.opPress&&id!==12?1:0),uTool:I(id),uNib:I(S.nib|0),uPenType:I(air?(S.airType|0):(S.penType|0)),uBlender:I(S.blender?1:0),uSelOn:I(d.sel?1:0),uSel:T(d.selT||G.one),uDS:[d.w,d.h],
   uSeed:air?stroke.seed+(stroke.dabN=(stroke.dabN||0)+1)*1.6180339:stroke.seed,uCenter:[x,y],uRadius:rad,uAngle:ang,uPressure:p,uStep:step,uFlow:o.flow??1,uBleed:bleed,uInkLvl:S.inkLvl,uNibAng:stroke.nibAng,uEHard:air?S.airHard:S.eHard};
  if(mk)ensureBase(d,clipR(d,[box[0]-4,box[1]-4,box[2]+4,box[3]+4]));
  if(opm)ensureBase(d,box,L.fCol,L.fGH);
@@ -1255,7 +1256,8 @@ function beginStroke(d,x,y,p,record,ev){
  if(isLocked(L)&&!d.isPal){toast('ロック中のレイヤーです。レイヤーのロックを外してください');return false;}
  const t=S.tool;const mk=!d.isPal&&d.editMask&&L.mask;const clr=!!S.clearInk&&!d.isPal&&!mk&&!(t==='marker'&&S.blender);
  const opq=t==='marker'&&!!S.mkOpq&&!mk&&!S.blender&&!d.isPal;const opv=OP_TOOLS.has(t)?clamp((S.ops||{})[t]??1,.01,1):1;
- const opm=!mk&&!d.isPal&&(opq||opv<.999&&t!=='marker');
+ const opPress=OP_TOOLS.has(t)&&!!(S.opPress||{})[t]&&!S.blender;
+ const opm=!mk&&!d.isPal&&(opq||(opv<.999||opPress)&&t!=='marker');
  if(d.mk.active&&(d.mk.layer!==L||t!=='marker'||mk||clr||opq||d.mk.mix!==!!S.mkMix))settle(d);
  if(opm){try{ensureMarker(d);}catch(err){console.error(err);toast(err.message||'ブラシを準備できませんでした');return false;}}
  if(t==='marker'&&!mk&&!clr&&!opq){try{ensureMarker(d);}catch(err){console.error(err);toast(err.message||'マーカーを準備できませんでした');return false;}}
@@ -1265,7 +1267,7 @@ function beginStroke(d,x,y,p,record,ev){
  const useTaper=t==='pen'||t==='pencil'||(t==='marker'&&S.nib!==1);
  stroke={d,tool:t,mask:!!mk,pts:[{x,y,p,s:0}],total:0,next:0,idx:0,dir:null,len:0,seed:Math.random()*100,first:true,t0:now,lastT:ev?ev.timeStamp:now,lastIn:null,lastMove:now,
   spd:0,lastEv:now,bleed:t==='marker'?.12:0,dwell:0,tilt:null,tiltMag:0,box:null,down:false,
-  clear:clr,opq,op:opm,opv,tau:Math.pow(S.stab,1.6)*220,sx:x,sy:y,sp:p,rx:x,ry:y,rp:p,iri:useTaper?tp[0]*d.sizeK:0,nuki:useTaper?tp[1]*d.sizeK:0};
+  clear:clr,opq,op:opm,opv,opPress,tau:Math.pow(S.stab,1.6)*220,sx:x,sy:y,sp:p,rx:x,ry:y,rp:p,iri:useTaper?tp[0]*d.sizeK:0,nuki:useTaper?tp[1]*d.sizeK:0};
  if(stroke.tau<.5)stroke.tau=0;RB.active=false;
  stroke.snap=(d===D&&S.snap&&D.ruler)?snapFn(D.ruler,x,y):null;
  if(stroke.snap){const q=stroke.snap(x,y);stroke.pts[0].x=stroke.sx=stroke.rx=q[0];stroke.pts[0].y=stroke.sy=stroke.ry=q[1];}
@@ -2044,7 +2046,7 @@ function syncUI(){for(const id in RANGES){const r=RANGES[id];$('#r_'+id).value=r
  for(const id in CHECKS)$('#'+id).checked=!!S[CHECKS[id]];
  $('#s_paper').value=D?D.paperType:S.paper;$('#s_nib').value=S.nib;$('#s_pen').value=S.penType;$('#s_font').value=typeof S.font==='string'?'f:'+S.font:'i:'+(S.font|0);$('#s_pencil').value=S.pencilType;
  $$('#brushSec [data-t]').forEach(el=>{let on=el.dataset.t.split(' ').includes(S.tool);if(on&&el.dataset.nib!=null)on=String(S.nib)===el.dataset.nib;if(on&&el.dataset.nonib&&S.tool==='marker')on=S.nib!==1;el.hidden=!on;});
- if(S.tool==='marker'&&S.mkOpq)$('#mixSeg').hidden=true;$$('#opqSeg button').forEach(b=>b.setAttribute('aria-pressed',(b.dataset.o==='1')===!!S.mkOpq));
+ if(S.tool==='marker'&&S.mkOpq)$('#mixSeg').hidden=true;$('#c_opPress').checked=!!(S.opPress||{})[S.tool];$$('#opqSeg button').forEach(b=>b.setAttribute('aria-pressed',(b.dataset.o==='1')===!!S.mkOpq));
  $$('#selShapeSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.shape===S.selShape));
  $$('#fillRefSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.ref===S.fillRef));
  $$('#airSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.air===(S.airType|0)));$$('#mixSeg button').forEach(b=>b.setAttribute('aria-pressed',(b.dataset.mix==='1')===!!S.mkMix));$('#c_tfkeep').checked=!!S.tfKeep;$('#s_tfq').value=S.tfQ?1:0;
@@ -2063,6 +2065,7 @@ $('#bPick').onclick=()=>{picking=true;updCursorSize();toast('取りたい色を�
 
 $('#bUndo').onclick=doUndo;$('#bRedo').onclick=doRedo;
 $('#bFit').onclick=fit;
+$('#c_opPress').onchange=e=>{(S.opPress=S.opPress||{})[S.tool]=e.target.checked;saveSettings();};
 $$('#opqSeg button').forEach(b=>b.onclick=()=>{S.mkOpq=b.dataset.o==='1';if(D&&!stroke)settle(D);saveSettings();syncUI();});
 $$('#unitSeg button').forEach(b=>b.onclick=()=>{S.unit=b.dataset.u;saveSettings();syncUI();updStatus();});
 /* ---------- canvas size / resolution ---------- */
