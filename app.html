@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="enogu-build" content="202611101629">
+<meta name="enogu-build" content="202611101652">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' data: blob:">
 <title>絵具箱</title>
 <link rel="stylesheet" href="fonts/fonts.css">
@@ -808,13 +808,11 @@ void put2(vec4 L,vec3 Gz,float h,float cov,float gk,bool er){
 #endif
  if(er||uClear==1){oC=vec4(L.rgb,L.a*(1.-cov));oH=vec4(mix(Gz,vec3(1.),cov),h*(1.-cov));}
  else{
-  /* paint goes over this layer's glaze: keep the glaze and lay the paint pre-divided by it (exact layering), lifting the glaze
-     only as far as a lighter paint needs and only as much as it covers, so soft edges show neither a grey nor a white rim */
-  vec3 kk=clamp((uColor-Gz)/max(vec3(1.)-Gz,vec3(1e-4)),0.,1.);float kx=max(kk.r,max(kk.g,kk.b));
-  vec3 g2=mix(Gz,vec3(1.),kx*cov);
-  /* the layer's glaze multiplies its paint, so paint laid over glaze is pre-divided by what is left of it:
-     a soft edge then reads as paint over the glazed colour instead of turning muddy grey */
-  vec3 cc=clamp(uColor/max(g2,vec3(.02)),0.,1.);oC=depositO(L,cc,cov);
+  /* paint goes over this layer's glaze. Channels where the paint is darker than the glaze: keep the glaze and lay the paint
+     pre-divided by it (exact). Channels where the paint is lighter: lift the glaze to exactly the target mix and let the paint
+     add nothing there. Either way the result over the paper is mix(glazed paper, paint, cov) — no grey, white or dark rims. */
+  vec3 lift=step(Gz+vec3(1e-4),uColor);vec3 g2=mix(Gz,mix(Gz,uColor,clamp(cov,0.,1.)),lift);
+  vec3 cc=mix(clamp(uColor/max(Gz,vec3(.02)),0.,1.),vec3(1.),lift);oC=depositO(L,cc,cov);
   /* opaque marker ink laid thinly: the part that does not cover is kept as a dye tint, so over white a coat of strength cov
      reads as colour^cov exactly like the transparent ink, instead of colour washed out with white */
   if(uMkOpq==1&&cov<.999)g2*=pow(clamp(pow(uColor,vec3(cov))/max(mix(vec3(1.),uColor,cov),vec3(1e-4)),0.,1.),vec3(min(Gz.r,min(Gz.g,Gz.b))));
