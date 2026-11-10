@@ -1,5 +1,5 @@
 // 絵具箱 service worker: works offline after the first visit.
-const CACHE='enogubako-f55b935370';
+const CACHE='enogubako-7e129bb7d6';
 const CORE=['./','index.html','manifest.webmanifest','icon-180.png','icon-192.png','icon-512.png'];
 const FONT_HOSTS=['fonts.googleapis.com','fonts.gstatic.com'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()));});
